@@ -1,0 +1,22 @@
+{
+  "name": "movie-book-rating-system-main",
+  "version": "1.0.0",
+  "description": "Dự án yêu cầu toàn bộ thành viên trong nhóm (V1-V5) phải cài đặt và sử dụng môi trường phát triển đồng nhất theo bảng tiêu chuẩn dưới đây:",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.24.4"
+  }
+}
