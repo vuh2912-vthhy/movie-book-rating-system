@@ -11,6 +11,7 @@ app.use(cookieParser());
 // Định tuyến API đăng nhập
 app.post('/api/login', AuthController.login);
 app.put('/api/reviews/:id', ReviewController.update);
+app.post('/api/reviews', ReviewController.create);
 
 // Tầng xử lý lỗi tập trung của V1
 app.use((err, req, res, next) => {
