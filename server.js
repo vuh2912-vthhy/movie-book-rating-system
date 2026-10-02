@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const AuthController = require('./src/controllers/authController');
@@ -23,7 +24,13 @@ app.use((err, req, res, next) => {
     res.status(statusCode).json({ success: false, message: err.message });
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
-});
+const PORT = process.env.PORT || 3000;
+
+// Vercel nạp ứng dụng qua module.exports; chỉ tự lắng nghe cổng khi chạy cục bộ
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
