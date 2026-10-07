@@ -6,4 +6,5 @@ const MovieController = require('../controllers/movieController');
 // Nguyên tắc: Route định danh cụ thể (/trending) bắt buộc phải đặt TRƯỚC các route chứa tham số (như /:id) để tránh xung đột.
 router.get('/trending', MovieController.getTrending);
 
+router.get('/search', MovieController.searchAndPaginate);
 module.exports = router;

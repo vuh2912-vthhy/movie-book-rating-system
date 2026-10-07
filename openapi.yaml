@@ -1,0 +1,82 @@
+openapi: 3.0.0
+info:
+  title: Movie & Book Rating API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api
+paths:
+  /movies:
+    get:
+      summary: Lấy danh sách phim
+      responses:
+        '200':
+          description: Thành công
+  /auth/login:
+    post:
+      summary: Đăng nhập
+      responses:
+        '200':
+          description: Đăng nhập thành công
+  /movies/search:
+    get:
+      summary: Tìm kiếm, lọc và phân trang danh sách phim
+      description: Cho phép tìm kiếm theo từ khóa tên phim, lọc theo thể loại, hỗ trợ phân trang phía máy chủ và chống quá tải bằng giới hạn kích thước trang tối đa.
+      parameters:
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Từ khóa tìm kiếm theo tên phim (khớp chuỗi con)
+        - name: genre
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Lọc theo thể loại phim
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Số trang hiện tại cần lấy dữ liệu
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Số lượng bản ghi trên một trang (giới hạn tối đa là 50 ở phía máy chủ)
+      responses:
+        '200':
+          description: Thành công, trả về danh sách phim và siêu dữ liệu phân trang
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  pagination:
+                    type: object
+                    properties:
+                      currentPage:
+                        type: integer
+                        example: 1
+                      pageSize:
+                        type: integer
+                        example: 20
+                      totalRecords:
+                        type: integer
+                        example: 100
+                      totalPages:
+                        type: integer
+                        example: 5
+        '500':
+          description: Lỗi máy chủ không lường trước
