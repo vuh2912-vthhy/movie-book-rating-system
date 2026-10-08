@@ -5,6 +5,8 @@ const AuthController = require('./src/controllers/authController');
 const ReviewController = require('./src/controllers/reviewController');
 const reviewRoutes = require('./src/routes/reviewRoutes'); 
 const movieRoutes = require('./src/routes/movieRoutes');   
+const authRoutes = require('./src/routes/authRoutes');
+const adminRoutes = require('./src/routes/adminRoutes');
 const app = express();
 const { upload, verifyMagicBytes } = require('./src/middlewares/uploadMiddleware');
 
@@ -27,19 +29,10 @@ app.use('/api/movies', (req, res, next) => {
 });
 
 app.use('/api/v1/movies', movieRoutes);
-app.post('/api/v1/movies/upload-poster', upload.single('poster'), verifyMagicBytes, (req, res) => {
-    try {
-        res.status(200).json({
-            success: true,
-            message: "Tải tệp an toàn thành công!",
-            filePath: `/storage/uploads/${req.verifiedFile.filename}`
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
 // Định tuyến API đăng nhập
-app.post('/api/login', AuthController.login);
+app.use('/api/v1/auth', authRoutes);
+// Định tuyến API quản trị
+app.use('/api/v1/admin', adminRoutes);
 
 // Tầng xử lý lỗi tập trung của V1
 app.use((err, req, res, next) => {

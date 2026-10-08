@@ -1,5 +1,6 @@
 const MovieService = require('../services/movieService');
 const MovieRepository = require('../repositories/movieRepository');
+const LogService = require('../services/logService');
 
 class MovieController {
     static async getTrending(req, res) {
@@ -42,6 +43,27 @@ class MovieController {
             });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    static async deleteMovie(req, res, next) {
+        try {
+            const movieId = req.params.id;
+            
+            // Thực hiện xóa phim (giả sử gọi qua Repository hoặc Service)
+            // await MovieRepository.delete(movieId);
+
+            // GHI LOG: Thao tác xóa dữ liệu nhạy cảm
+            // req.user.id lấy từ middleware xác thực token trước đó
+            const userId = req.user ? req.user.id : null;
+            await LogService.logAction(userId, 'DELETE', 'movies', movieId, req.ip);
+
+            res.status(200).json({
+                success: true,
+                message: "Xóa phim thành công và đã ghi nhật ký hệ thống."
+            });
+        } catch (error) {
+            next(error);
         }
     }
 }

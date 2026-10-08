@@ -33,9 +33,16 @@ const verifyMagicBytes = async (req, res, next) => {
     }
 
     try {
-        // Sử dụng dynamic import để tương thích với file-type (ESM-only)
-        const { fileTypeFromFile } = await import('file-type');
-        const detectedType = await fileTypeFromFile(req.file.path);
+        // Sử dụng dynamic import để nạp thư viện
+        const fileType = await import('file-type');
+        
+        // Trích xuất hàm đọc tệp bao quát mọi phiên bản của thư viện
+        const checkSignature = fileType.fileTypeFromFile 
+                            || fileType.fromFile 
+                            || (fileType.default && (fileType.default.fileTypeFromFile || fileType.default.fromFile));
+        
+        // Đọc cấu trúc byte thực tế của tệp
+        const detectedType = await checkSignature(req.file.path);
         
         // Danh sách các định dạng hình ảnh cho phép
         const allowedTypes = ['jpg', 'jpeg', 'png', 'webp'];
