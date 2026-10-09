@@ -1,99 +1,93 @@
-// src/middlewares/authMiddleware.js
+'use strict';
 const jwt = require('jsonwebtoken');
+const env = require('../config/env');
+const HttpError = require('../utils/httpError');
 const UserRepository = require('../repositories/userRepository');
 
-// Khóa bí mật và thuật toán phải trùng khớp với AuthService khi cấp phát token
-const JWT_SECRET = process.env.JWT_SECRET || 'chua_khoa_bi_mat_sieu_cung';
-const JWT_ALGORITHM = 'HS256';
-
-// Tên cookie chứa token do AuthController phát hành lúc đăng nhập
 const ACCESS_TOKEN_COOKIE = 'accessToken';
 
-// Mã vai trò quản trị trong bảng roles
-const ADMIN_ROLE_CODE = 'admin';
-
-// Lấy token từ cookie bảo mật, dự phòng bằng header Authorization dạng Bearer
 const extractToken = (req) => {
-    if (req.cookies && req.cookies[ACCESS_TOKEN_COOKIE]) {
-        return req.cookies[ACCESS_TOKEN_COOKIE];
-    }
-
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        return authHeader.slice('Bearer '.length).trim();
-    }
-
+    if (req.cookies && req.cookies[ACCESS_TOKEN_COOKIE]) return req.cookies[ACCESS_TOKEN_COOKIE];
+    const header = req.headers.authorization;
+    if (header && header.startsWith('Bearer ')) return header.slice(7).trim();
     return null;
 };
 
-// Chuẩn hóa lỗi để tầng xử lý lỗi tập trung ở server.js đọc được statusCode
-const createHttpError = (statusCode, message) => {
-    const error = new Error(message);
-    error.statusCode = statusCode;
-    return error;
-};
-
-// Chặng 1: xác thực token và gắn thông tin người dùng vào req.user
-const verifyToken = (req, res, next) => {
+// Xác thực đầy đủ: chữ ký + hạn token, rồi đối chiếu CSDL (tài khoản còn hoạt động, token đúng phiên bản).
+// Nhờ vậy khóa tài khoản và đăng xuất có hiệu lực ngay, không phải chờ token hết hạn.
+const authenticate = async (req) => {
     const token = extractToken(req);
+    if (!token) throw HttpError.unauthorized('Chưa đăng nhập', 'UNAUTHENTICATED');
 
-    if (!token) {
-        return next(createHttpError(401, 'Chưa đăng nhập: thiếu token xác thực!'));
-    }
-
+    let decoded;
     try {
-        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
-
-        req.user = {
-            id: decoded.id || null,
-            email: decoded.email || null,
-            role: decoded.role || null
-        };
-
-        return next();
+        decoded = jwt.verify(token, env.jwt.secret, { algorithms: [env.jwt.algorithm] });
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
-            return next(createHttpError(401, 'Phiên đăng nhập đã hết hạn!'));
+            throw HttpError.unauthorized('Phiên đăng nhập đã hết hạn', 'TOKEN_EXPIRED');
         }
-
-        return next(createHttpError(401, 'Token không hợp lệ!'));
+        throw HttpError.unauthorized('Token không hợp lệ', 'INVALID_TOKEN');
     }
+
+    const userId = Number(decoded.sub);
+    if (!Number.isInteger(userId) || userId <= 0) {
+        throw HttpError.unauthorized('Token không hợp lệ', 'INVALID_TOKEN');
+    }
+
+    const context = await UserRepository.findAuthContextById(userId);
+    if (!context) throw HttpError.unauthorized('Token không hợp lệ', 'INVALID_TOKEN');
+    if (context.status !== 'active') {
+        throw HttpError.forbidden('Tài khoản đã bị khóa hoặc chưa được kích hoạt', 'ACCOUNT_DISABLED');
+    }
+
+    // Token chỉ hợp lệ khi mang đúng số phiên bản hiện tại của tài khoản.
+    // Token cũ (không có 'tv') hoặc phát trước lần đăng xuất gần nhất đều bị thu hồi.
+    if (decoded.tv !== context.tokenVersion) {
+        throw HttpError.unauthorized('Phiên đăng nhập đã bị thu hồi', 'TOKEN_REVOKED');
+    }
+
+    return context;
 };
 
-// Xác định quyền quản trị: bảng RBAC là nguồn dữ liệu chính,
-// claim đã ký trong token là phương án dự phòng khi chưa gán vai trò trong CSDL.
-const isGrantedAdmin = async (user) => {
-    if (!user) return false;
-
-    let userId = user.id;
-    if (!userId && user.email) {
-        userId = await UserRepository.findIdByEmail(user.email);
-    }
-
-    if (userId && (await UserRepository.hasRole(userId, ADMIN_ROLE_CODE))) {
-        return true;
-    }
-
-    return user.role === ADMIN_ROLE_CODE;
-};
-
-// Chặng 2: chỉ cho phép tài khoản có vai trò quản trị đi tiếp
-const isAdmin = async (req, res, next) => {
-    if (!req.user) {
-        return next(createHttpError(401, 'Chưa đăng nhập!'));
-    }
-
+// Bắt buộc đăng nhập
+const verifyToken = async (req, res, next) => {
     try {
-        const granted = await isGrantedAdmin(req.user);
-
-        if (!granted) {
-            return next(createHttpError(403, 'Bạn không có quyền truy cập chức năng quản trị!'));
-        }
-
-        return next();
+        req.user = await authenticate(req);
+        next();
     } catch (error) {
-        return next(error);
+        next(error);
     }
 };
 
-module.exports = { verifyToken, isAdmin };
+// Đăng nhập không bắt buộc (trang công khai có cá nhân hóa): lỗi xác thực => coi như khách.
+const optionalAuth = async (req, res, next) => {
+    try {
+        req.user = await authenticate(req);
+    } catch (error) {
+        req.user = null;
+        if (!(error instanceof HttpError) || error.statusCode >= 500) return next(error);
+    }
+    next();
+};
+
+// Kiểm soát quyền ở MÁY CHỦ theo bảng role_permissions (không dựa vào ẩn hiện giao diện).
+const authorize = (permission) => (req, res, next) => {
+    if (!req.user) return next(HttpError.unauthorized('Chưa đăng nhập', 'UNAUTHENTICATED'));
+    if (!req.user.permissions.includes(permission)) {
+        return next(HttpError.forbidden('Bạn không có quyền thực hiện thao tác này', 'FORBIDDEN'));
+    }
+    return next();
+};
+
+const requireRole = (...roleCodes) => (req, res, next) => {
+    if (!req.user) return next(HttpError.unauthorized('Chưa đăng nhập', 'UNAUTHENTICATED'));
+    if (!roleCodes.some((code) => req.user.roles.includes(code))) {
+        return next(HttpError.forbidden('Bạn không có quyền thực hiện thao tác này', 'FORBIDDEN'));
+    }
+    return next();
+};
+
+// Tương thích mã cũ: isAdmin = chỉ vai trò ADMIN
+const isAdmin = requireRole('ADMIN');
+
+module.exports = { verifyToken, optionalAuth, authorize, requireRole, isAdmin, ACCESS_TOKEN_COOKIE };

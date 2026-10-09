@@ -1,18 +1,27 @@
+'use strict';
 const mysql = require('mysql2/promise');
-require('dotenv').config(); 
+const env = require('./env');
 
-// Tạo Pool kết nối đến CSDL (Sẽ lấy thông tin thật từ file .env của bạn)
+// Aiven bắt buộc SSL. Nếu cung cấp DB_SSL_CA thì xác thực đầy đủ chứng chỉ máy chủ;
+// nếu không, chỉ mã hóa đường truyền (chấp nhận cho môi trường học tập).
+const buildSsl = () => {
+    if (!env.db.ssl) return undefined;
+    return env.db.sslCa ? { ca: env.db.sslCa } : { rejectUnauthorized: false };
+};
+
 const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'movie_rating',
-    port: process.env.DB_PORT || 3306,
-    ssl: {
-        rejectUnauthorized: false 
-    },
+    host: env.db.host,
+    port: env.db.port,
+    user: env.db.user,
+    password: env.db.password,
+    database: env.db.database,
+    ssl: buildSsl(),
+    charset: 'utf8mb4',
+    timezone: 'Z',        // đọc/ghi thời gian theo UTC
+    dateStrings: true,    // trả DATETIME dạng chuỗi 'YYYY-MM-DD HH:MM:SS', không tự đổi múi giờ
+    decimalNumbers: true, // DECIMAL trả về số, không phải chuỗi
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: env.db.poolLimit, // giữ nhỏ vì Vercel chạy nhiều bản sao hàm
     queueLimit: 0
 });
 

@@ -1,54 +1,53 @@
+'use strict';
 const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
-const AuthController = require('./src/controllers/authController');
-const ReviewController = require('./src/controllers/reviewController');
-const reviewRoutes = require('./src/routes/reviewRoutes'); 
-const movieRoutes = require('./src/routes/movieRoutes');   
+
+const env = require('./src/config/env'); // kiểm tra biến môi trường ngay khi khởi động
+const db = require('./src/config/database');
+const { notFoundHandler, errorHandler } = require('./src/middlewares/errorHandler');
+
 const authRoutes = require('./src/routes/authRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
-const app = express();
-const { upload, verifyMagicBytes } = require('./src/middlewares/uploadMiddleware');
+// Tạm giữ các route cũ cho tới khi được viết lại theo schema mới (Ngày 2-3)
+const movieRoutes = require('./src/routes/movieRoutes');
+const reviewRoutes = require('./src/routes/reviewRoutes');
 
-// --- THÊM ĐOẠN CODE NÀY ĐỂ BẮT MỌI REQUEST ---
-app.use((req, res, next) => {
-    console.log(`🔍 [INCOMING REQUEST] Phương thức: ${req.method} | Đường dẫn gốc: ${req.url}`);
-    next();
-});
-// ---------------------------------------------
-// Kích hoạt middleware để đọc dữ liệu JSON và Cookie
-app.use(express.json());
+const app = express();
+
+app.disable('x-powered-by');
+app.set('trust proxy', 1); // phía sau proxy của Vercel: req.ip là IP thật của người dùng
+
+app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 
-// Kích hoạt routes với tiền tố /api
-app.use('/api/reviews', reviewRoutes);
-// Thêm đoạn code này để kiểm tra xem request có chạm tới server không
-app.use('/api/movies', (req, res, next) => {
-    console.log(`[DEBUG ROUTE] Nhận request: ${req.method} ${req.originalUrl}`);
-    next();
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+
+// Kiểm tra sống: dùng cho giám sát và để "làm nóng" hàm serverless trước giờ chấm
+app.get('/api/v1/health', async (req, res) => {
+    try {
+        await db.query('SELECT 1');
+        res.status(200).json({ success: true, data: { status: 'ok' } });
+    } catch (error) {
+        console.error('[health] Lỗi kết nối CSDL:', error.code || error.message);
+        res.status(503).json({
+            success: false,
+            error: { code: 'DB_UNAVAILABLE', message: 'Không kết nối được cơ sở dữ liệu', details: [] }
+        });
+    }
 });
 
-app.use('/api/v1/movies', movieRoutes);
-// Định tuyến API đăng nhập
 app.use('/api/v1/auth', authRoutes);
-// Định tuyến API quản trị
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/movies', movieRoutes);
+app.use('/api/reviews', reviewRoutes);
 
-// Tầng xử lý lỗi tập trung của V1
-app.use((err, req, res, next) => {
-    const statusCode = err.statusCode || 500;
-    res.status(statusCode).json({ success: false, message: err.message });
-});
-
-const PORT = process.env.PORT || 3000;
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Vercel nạp ứng dụng qua module.exports; chỉ tự lắng nghe cổng khi chạy cục bộ
 if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
-    });
+    app.listen(env.port, () => console.log(`Server đang chạy tại http://localhost:${env.port}`));
 }
-
-console.log('SERVER VERSION: upload-poster v2');
 
 module.exports = app;

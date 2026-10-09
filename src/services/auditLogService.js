@@ -1,29 +1,33 @@
-const db = require('../config/database');
+'use strict';
+const AuditLogRepository = require('../repositories/auditLogRepository');
+
+// Chấp nhận chuỗi IP, hoặc (tương thích mã cũ) đối tượng request của Express.
+const normalizeIp = (ip) => {
+    const raw = typeof ip === 'string' ? ip : ip && typeof ip.ip === 'string' ? ip.ip : null;
+    if (!raw) return null;
+    return raw.trim().replace(/^::ffff:/, '').slice(0, 45) || null;
+};
 
 class AuditLogService {
     /**
-     * Ghi nhật ký hệ thống
-     * @param {number} userId - ID người dùng thực hiện (null nếu khách)
-     * @param {string} action - 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'CHANGE_ROLE', 'DELETE_REVIEW'
-     * @param {string} entity - Tên bảng bị tác động (VD: 'Reviews', 'users')
-     * @param {number} entityId - ID của bản ghi bị tác động
-     * @param {object} req - Object request của Express để lấy IP
+     * Ghi nhật ký hành vi nhạy cảm. Không bao giờ ném lỗi ra ngoài để không làm hỏng nghiệp vụ chính.
+     * @param {number|null} userId  người thực hiện (null nếu khách / hệ thống)
+     * @param {string} action       ví dụ LOGIN_SUCCESS, LOGIN_FAILED, LOGOUT, REGISTER, ACCOUNT_LOCKED
+     * @param {string} entity       tên bảng bị tác động, ví dụ 'users'
+     * @param {number|null} entityId
+     * @param {string|object|null} ip
      */
-    static async logAction(userId, action, entity, entityId = null, req = {}) {
+    static async logAction(userId, action, entity, entityId = null, ip = null) {
         try {
-            const ipAddress = req.ip || req.connection?.remoteAddress || null;
-
-            const sql = `
-                INSERT INTO audit_logs (user_id, action, entity, entity_id, ip)
-                VALUES (?, ?, ?, ?, ?)
-            `;
-            // Cấu trúc biến phải khớp chính xác thứ tự với INSERT INTO
-            const params = [userId, action, entity, entityId, ipAddress];
-            
-            await db.execute(sql, params);
+            await AuditLogRepository.insert({
+                userId: userId || null,
+                action,
+                entity,
+                entityId: entityId || null,
+                ip: normalizeIp(ip)
+            });
         } catch (error) {
-            console.error("LỖI GHI LOG HỆ THỐNG:", error.message);
-            // Không throw error để tránh chặn luồng nghiệp vụ chính của người dùng
+            console.error('[audit] Không ghi được nhật ký:', error.code || error.message);
         }
     }
 }

@@ -1,38 +1,98 @@
+'use strict';
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-// Giả lập model UserRepository (bạn sẽ gọi db thực tế ở Bước sau)
-// const UserRepository = require('../repositories/userRepository');
+const env = require('../config/env');
+const HttpError = require('../utils/httpError');
+const { validateRegister, validateLogin } = require('../utils/validators');
+const UserRepository = require('../repositories/userRepository');
+const AuditLogService = require('./auditLogService');
+
+const DEFAULT_ROLE = 'USER';
+// Băm giả để thời gian phản hồi khi email không tồn tại gần bằng khi email tồn tại.
+const DUMMY_HASH = bcrypt.hashSync('khong-phai-mat-khau-that', env.bcryptRounds);
 
 class AuthService {
-    static async registerUser(email, plainPassword) {
-        // Thuật toán bcrypt kết hợp muối (salt) 10 vòng
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(plainPassword, saltRounds);
-        
-        // TODO: Gọi UserRepository.create(email, hashedPassword) để lưu vào DB
-        
-        return hashedPassword; // Trả về để test
-    }
+    static async register(body, ip) {
+        const { errors, value } = validateRegister(body);
+        if (errors.length) {
+            throw HttpError.unprocessable('Dữ liệu đăng ký không hợp lệ', errors);
+        }
 
-    static async loginUser(email, plainPassword, storedHashedPassword) {
-        // So sánh mật khẩu người dùng nhập với chuỗi băm trong DB
-        const isMatch = await bcrypt.compare(plainPassword, storedHashedPassword);
-        if (!isMatch) {
-            const error = new Error('Sai thông tin đăng nhập');
-            error.statusCode = 401;
+        const passwordHash = await bcrypt.hash(value.password, env.bcryptRounds);
+
+        let userId;
+        try {
+            userId = await UserRepository.createWithRole({
+                email: value.email,
+                passwordHash,
+                fullName: value.fullName,
+                displayName: value.displayName,
+                roleCode: DEFAULT_ROLE
+            });
+        } catch (error) {
+            if (error && error.code === 'ER_DUP_ENTRY') {
+                throw HttpError.conflict('Email này đã được đăng ký', 'EMAIL_TAKEN');
+            }
             throw error;
         }
 
-        // Cấp phát Token với thuật toán HS256 theo yêu cầu của giáo viên
-        const token = jwt.sign(
-            { email: email, role: 'user' }, 
-            process.env.JWT_SECRET || 'chua_khoa_bi_mat_sieu_cung', 
-            { 
-                expiresIn: '1h',
-                algorithm: 'HS256' // Khai báo tường minh thuật toán
+        await AuditLogService.logAction(userId, 'REGISTER', 'users', userId, ip);
+        return { id: userId, email: value.email, displayName: value.displayName };
+    }
+
+    static async login(body, ip) {
+        const { errors, value } = validateLogin(body);
+        if (errors.length) {
+            throw HttpError.unprocessable('Thiếu thông tin đăng nhập', errors);
+        }
+
+        const user = await UserRepository.findByEmail(value.email);
+
+        if (user && Number(user.is_temp_locked)) {
+            await AuditLogService.logAction(user.id, 'LOGIN_FAILED', 'users', user.id, ip);
+            throw HttpError.tooManyRequests(
+                'Tài khoản tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.',
+                'TOO_MANY_ATTEMPTS'
+            );
+        }
+
+        const passwordOk = await bcrypt.compare(value.password, user ? user.password_hash : DUMMY_HASH);
+
+        if (!user || !passwordOk) {
+            if (user) {
+                const nowLocked = await UserRepository.registerFailedLogin(
+                    user.id, env.login.maxAttempts, env.login.lockMinutes
+                );
+                if (nowLocked) {
+                    await AuditLogService.logAction(user.id, 'ACCOUNT_LOCKED', 'users', user.id, ip);
+                }
             }
+            await AuditLogService.logAction(user ? user.id : null, 'LOGIN_FAILED', 'users', user ? user.id : null, ip);
+            throw HttpError.unauthorized('Email hoặc mật khẩu không chính xác', 'INVALID_CREDENTIALS');
+        }
+
+        // Chỉ tiết lộ trạng thái tài khoản sau khi mật khẩu đã đúng.
+        if (user.status !== 'active') {
+            await AuditLogService.logAction(user.id, 'LOGIN_FAILED', 'users', user.id, ip);
+            throw HttpError.forbidden('Tài khoản đã bị khóa hoặc chưa được kích hoạt', 'ACCOUNT_DISABLED');
+        }
+
+        await UserRepository.recordSuccessfulLogin(user.id);
+
+        const token = jwt.sign(
+            { sub: String(user.id), email: user.email, tv: Number(user.token_version) },
+            env.jwt.secret,
+            { algorithm: env.jwt.algorithm, expiresIn: env.jwt.expiresIn }
         );
-        return token;
+
+        await AuditLogService.logAction(user.id, 'LOGIN_SUCCESS', 'users', user.id, ip);
+        return { token, user: { id: user.id, email: user.email, displayName: user.display_name } };
+    }
+
+    // Đăng xuất thật sự: thu hồi mọi token đã cấp, không chỉ xóa cookie phía trình duyệt.
+    static async logout(userId, ip) {
+        await UserRepository.revokeTokens(userId);
+        await AuditLogService.logAction(userId, 'LOGOUT', 'users', userId, ip);
     }
 }
 

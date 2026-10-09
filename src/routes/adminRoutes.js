@@ -1,12 +1,11 @@
+'use strict';
 const express = require('express');
-const router = express.Router();
-const { verifyToken, isAdmin } = require('../middlewares/authMiddleware'); 
-
-// Nhập khẩu LogController đã chuẩn hóa kiến trúc
+const { verifyToken, authorize } = require('../middlewares/authMiddleware');
 const LogController = require('../controllers/logController');
 
-// Endpoint: GET /api/v1/admin/system-logs
-// Giao toàn bộ luồng xử lý truy vấn cho Controller, Route chỉ làm nhiệm vụ điều hướng và chắn cổng bảo mật
-router.get('/system-logs', verifyToken, isAdmin, LogController.getLogs);
+const router = express.Router();
+
+// GET /api/v1/admin/system-logs - cần đăng nhập VÀ có quyền audit.read (chỉ ADMIN)
+router.get('/system-logs', verifyToken, authorize('audit.read'), LogController.getLogs);
 
 module.exports = router;

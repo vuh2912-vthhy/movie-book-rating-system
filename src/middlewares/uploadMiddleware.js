@@ -1,17 +1,24 @@
 // src/middlewares/uploadMiddleware.js
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 
-// Cấu hình nơi lưu trữ: Lưu NGOÀI thư mục public (ngoài vùng thực thi trực tiếp)
-const uploadDir = path.join(__dirname, '../../storage/uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Vercel (serverless) có hệ tệp chỉ đọc, chỉ ghi được vào thư mục tạm.
+// Ở đó tệp tải lên KHÔNG được giữ lâu dài: ngày 13/10 sẽ chuyển sang lưu trữ ngoài.
+// Thư mục chỉ được tạo khi có yêu cầu tải lên, không tạo lúc nạp module (tránh sập khi khởi động).
+const uploadDir = process.env.VERCEL
+    ? path.join(os.tmpdir(), 'uploads')
+    : path.join(__dirname, '../../storage/uploads');
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, uploadDir);
+        try {
+            fs.mkdirSync(uploadDir, { recursive: true });
+            cb(null, uploadDir);
+        } catch (error) {
+            cb(error);
+        }
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);

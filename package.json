@@ -4,8 +4,8 @@
   "description": "Dự án yêu cầu toàn bộ thành viên trong nhóm (V1-V5) phải cài đặt và sử dụng môi trường phát triển đồng nhất theo bảng tiêu chuẩn dưới đây:",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "smoke": "node scripts/smoke-auth.js"
   },
   "keywords": [],
   "author": "",

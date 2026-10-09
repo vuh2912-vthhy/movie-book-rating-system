@@ -1,0 +1,9 @@
+# Chuẩn hóa ký tự xuống dòng về LF để tránh báo "đã sửa" hàng loạt giữa Windows và Linux
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.docx binary
+*.zip binary

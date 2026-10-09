@@ -1,14 +1,23 @@
-# Thư mục thư viện
+# Thư viện
 node_modules/
 vendor/
 
-# Các tệp cấu hình môi trường chứa mật khẩu (TUYỆT ĐỐI KHÔNG ĐƯA LÊN)
+# Cấu hình môi trường chứa bí mật (TUYỆT ĐỐI KHÔNG ĐƯA LÊN). Chỉ cho phép tệp mẫu.
 .env
 .env.local
 .env.*
+!.env.example
 
-# Các tệp rác của hệ điều hành và IDE
+# Tệp tải lên và tệp tạm
+storage/
+uploads/
+tmp_*.js
+cookies.txt
+
+# Rác của hệ điều hành và IDE
 .DS_Store
+desktop.ini
+Thumbs.db
 .idea/
 .vscode/
 *.log
