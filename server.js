@@ -9,9 +9,8 @@ const { notFoundHandler, errorHandler } = require('./src/middlewares/errorHandle
 
 const authRoutes = require('./src/routes/authRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
-// Tạm giữ các route cũ cho tới khi được viết lại theo schema mới (Ngày 2-3)
-const movieRoutes = require('./src/routes/movieRoutes');
-const reviewRoutes = require('./src/routes/reviewRoutes');
+const titleRoutes = require('./src/routes/titleRoutes');
+const genreRoutes = require('./src/routes/genreRoutes');
 
 const app = express();
 
@@ -39,8 +38,8 @@ app.get('/api/v1/health', async (req, res) => {
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
-app.use('/api/v1/movies', movieRoutes);
-app.use('/api/reviews', reviewRoutes);
+app.use('/api/v1/titles', titleRoutes);
+app.use('/api/v1/genres', genreRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

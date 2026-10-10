@@ -1,82 +1,459 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
   title: Movie & Book Rating API
-  version: 1.0.0
+  version: 1.1.0
+  description: >
+    Hệ thống đánh giá và phân tích dữ liệu phim/sách (CSE702051, đề tài 11).
+    Xác thực bằng cookie `accessToken` (HttpOnly) phát khi đăng nhập.
+    Mọi lỗi dùng chung cấu trúc `{ success:false, error:{ code, message, details } }`.
+    Xếp hạng dùng điểm có xét độ tin cậy: weighted_score = (v*R + m*C) / (v + m), m = 25.
 servers:
-  - url: http://localhost:3000/api
+  - url: http://localhost:3000/api/v1
+    description: Máy cục bộ
+  - url: https://movie-book-rating-system.vercel.app/api/v1
+    description: Trực tuyến (Vercel)
+tags:
+  - name: Hệ thống
+  - name: Xác thực
+  - name: Danh mục
+  - name: Đánh giá
+  - name: Quản trị
 paths:
-  /movies:
+  /health:
     get:
-      summary: Lấy danh sách phim
+      tags: [Hệ thống]
+      summary: Kiểm tra máy chủ và kết nối cơ sở dữ liệu
+      responses:
+        '200': { description: "Hoạt động bình thường" }
+        '503': { $ref: '#/components/responses/DbUnavailable' }
+  /auth/register:
+    post:
+      tags: [Xác thực]
+      summary: Đăng ký tài khoản (vai trò USER)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+            example: { email: nguoi.dung@demo.local, password: MatKhau12345, fullName: Nguyễn Văn A }
+      responses:
+        '201': { description: "Đăng ký thành công" }
+        '409': { description: "Email đã đăng ký (EMAIL_TAKEN)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /auth/login:
+    post:
+      tags: [Xác thực]
+      summary: Đăng nhập, phát cookie accessToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Thành công. Cookie `accessToken` (HttpOnly, SameSite=Strict, Secure trên HTTPS).
+          headers:
+            Set-Cookie: { schema: { type: string } }
+        '401': { description: "Sai thông tin (INVALID_CREDENTIALS)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: "Tài khoản bị khóa (ACCOUNT_DISABLED)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { description: "Khóa tạm do đăng nhập sai nhiều lần (TOO_MANY_ATTEMPTS)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /auth/logout:
+    post:
+      tags: [Xác thực]
+      summary: Đăng xuất và thu hồi mọi token đã cấp
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Đã đăng xuất" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /auth/me:
+    get:
+      tags: [Xác thực]
+      summary: Thông tin, vai trò và quyền của người đang đăng nhập
+      security: [{ cookieAuth: [] }]
       responses:
         '200':
           description: Thành công
-  /auth/login:
-    post:
-      summary: Đăng nhập
-      responses:
-        '200':
-          description: Đăng nhập thành công
-  /movies/search:
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /genres:
     get:
-      summary: Tìm kiếm, lọc và phân trang danh sách phim
-      description: Cho phép tìm kiếm theo từ khóa tên phim, lọc theo thể loại, hỗ trợ phân trang phía máy chủ và chống quá tải bằng giới hạn kích thước trang tối đa.
-      parameters:
-        - name: keyword
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Từ khóa tìm kiếm theo tên phim (khớp chuỗi con)
-        - name: genre
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Lọc theo thể loại phim
-        - name: page
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 1
-          description: Số trang hiện tại cần lấy dữ liệu
-        - name: size
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 20
-          description: Số lượng bản ghi trên một trang (giới hạn tối đa là 50 ở phía máy chủ)
+      tags: [Danh mục]
+      summary: Danh sách thể loại
       responses:
         '200':
-          description: Thành công, trả về danh sách phim và siêu dữ liệu phân trang
+          description: Thành công
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      type: object
-                  pagination:
-                    type: object
-                    properties:
-                      currentPage:
-                        type: integer
-                        example: 1
-                      pageSize:
-                        type: integer
-                        example: 20
-                      totalRecords:
-                        type: integer
-                        example: 100
-                      totalPages:
-                        type: integer
-                        example: 5
-        '500':
-          description: Lỗi máy chủ không lường trước
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/Genre' } }
+  /titles:
+    get:
+      tags: [Danh mục]
+      summary: Danh sách và tìm kiếm tác phẩm (phân trang phía máy chủ)
+      description: >
+        Khách chỉ thấy tác phẩm `published`. Nhân viên (quyền title.update) thêm được `status=draft|hidden|all`.
+        Từ khóa tìm không phân biệt dấu ("ky uc" khớp "Ký ức").
+      security: [{}, { cookieAuth: [] }]
+      parameters:
+        - { name: keyword, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: kind, in: query, schema: { type: string, enum: [movie, book] } }
+        - { name: genre, in: query, description: "Mã thể loại", schema: { type: string, example: drama } }
+        - { name: yearFrom, in: query, schema: { type: integer, minimum: 1850, maximum: 2100 } }
+        - { name: yearTo, in: query, schema: { type: integer, minimum: 1850, maximum: 2100 } }
+        - { name: sort, in: query, schema: { type: string, enum: [rating, newest, popular, title, year], default: rating } }
+        - { name: status, in: query, description: "Chỉ nhân viên", schema: { type: string, enum: [draft, published, hidden, all] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/TitleSummary' } }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      tags: [Danh mục]
+      summary: "Tạo tác phẩm (quyền title.create: MODERATOR, ADMIN)"
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TitleInput' }
+            example:
+              kind: movie
+              title: Ký ức cuối cùng
+              originalTitle: The Last Memory
+              releaseYear: 2025
+              runtimeMin: 110
+              synopsis: Một bộ phim về ký ức và sự tha thứ.
+              status: published
+              genreIds: [7]
+              credits: [{ personId: 1, role: director }, { personId: 2, role: actor, order: 1 }]
+      responses:
+        '201': { description: "Đã tạo, trả về id và mã MOV-xxxx hoặc BOK-xxxx" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /titles/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/TitleId' }
+    get:
+      tags: [Danh mục]
+      summary: Chi tiết tác phẩm (kèm thể loại, vai trò, thống kê, điểm của tôi nếu đã đăng nhập)
+      security: [{}, { cookieAuth: [] }]
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/TitleDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    put:
+      tags: [Danh mục]
+      summary: Thay thế thông tin tác phẩm (quyền title.update). Không đổi được loại phim/sách.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TitleInput' }
+      responses:
+        '200': { description: "Đã cập nhật" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Danh mục]
+      summary: "Ẩn tác phẩm (xóa mềm, quyền title.delete: chỉ ADMIN)"
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Đã ẩn" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /titles/{id}/rating:
+    parameters:
+      - { $ref: '#/components/parameters/TitleId' }
+    get:
+      tags: [Đánh giá]
+      summary: Điểm của chính tôi cho tác phẩm (null nếu chưa chấm)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Thành công" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Đánh giá]
+      summary: Chấm điểm hoặc sửa điểm (quyền rating.create)
+      description: >
+        Mỗi người một điểm cho một tác phẩm. Chấm lại cập nhật bản ghi cũ (200), chấm lần đầu tạo mới (201).
+        Bảng tổng hợp được cập nhật trong cùng giao dịch, an toàn khi nhiều người chấm đồng thời.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RatingInput' }
+            example: { score: 4 }
+      responses:
+        '200': { description: "Đã cập nhật điểm", content: { application/json: { schema: { $ref: '#/components/schemas/RatingResponse' } } } }
+        '201': { description: "Đã ghi nhận điểm mới", content: { application/json: { schema: { $ref: '#/components/schemas/RatingResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Đánh giá]
+      summary: Xóa điểm của tôi (quyền rating.delete_own)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Đã xóa" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: "Tác phẩm không tồn tại hoặc bạn chưa chấm (RATING_NOT_FOUND)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /admin/system-logs:
+    get:
+      tags: [Quản trị]
+      summary: "Nhật ký hệ thống (quyền audit.read: chỉ ADMIN)"
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 20, description: "Tối đa 100" } }
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/AuditLog' } }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /admin/aggregates/reconcile:
+    get:
+      tags: [Quản trị]
+      summary: Đối soát bảng tổng hợp xếp hạng với dữ liệu gốc (quyền aggregate.rebuild)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "`consistent=true` và `mismatches` rỗng nghĩa là khớp 100%" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/aggregates/rebuild:
+    post:
+      tags: [Quản trị]
+      summary: Dựng lại toàn bộ bảng tổng hợp xếp hạng từ bảng ratings (quyền aggregate.rebuild)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Đã dựng lại" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+  parameters:
+    TitleId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Size:
+      name: size
+      in: query
+      description: Số mục mỗi trang, tối đa 50 (giá trị lớn hơn bị cắt về 50)
+      schema: { type: integer, minimum: 1, default: 12 }
+  responses:
+    Unauthenticated:
+      description: Chưa đăng nhập, token hết hạn, sai hoặc đã bị thu hồi (UNAUTHENTICATED, TOKEN_EXPIRED, INVALID_TOKEN, TOKEN_REVOKED)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Không đủ quyền (FORBIDDEN) hoặc tài khoản bị khóa (ACCOUNT_DISABLED)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Không tìm thấy (TITLE_NOT_FOUND, NOT_FOUND)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ValidationFailed:
+      description: Dữ liệu không hợp lệ (VALIDATION_FAILED), `details` liệt kê từng trường
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    DbUnavailable:
+      description: Không kết nối được cơ sở dữ liệu (DB_UNAVAILABLE)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string, example: VALIDATION_FAILED }
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  code: { type: string }
+                  message: { type: string }
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName]
+      properties:
+        email: { type: string, format: email, maxLength: 190 }
+        password: { type: string, minLength: 8, maxLength: 72, description: "Có cả chữ cái và chữ số" }
+        fullName: { type: string, minLength: 2, maxLength: 120 }
+        displayName: { type: string, minLength: 2, maxLength: 60 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    MeResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            id: { type: integer }
+            email: { type: string }
+            fullName: { type: string }
+            displayName: { type: string }
+            roles: { type: array, items: { type: string } }
+            permissions: { type: array, items: { type: string } }
+    Genre:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        appliesTo: { type: string, enum: [movie, book, both] }
+    Stats:
+      type: object
+      properties:
+        ratingCount: { type: integer }
+        ratingAvg: { type: number, nullable: true, description: "Trung bình đơn thuần (2 chữ số)" }
+        weightedScore: { type: number, description: "Điểm xếp hạng có xét độ tin cậy" }
+        reviewCount: { type: integer }
+    TitleSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string, example: MOV-0012 }
+        kind: { type: string, enum: [movie, book] }
+        title: { type: string }
+        originalTitle: { type: string, nullable: true }
+        releaseYear: { type: integer }
+        runtimeMin: { type: integer, nullable: true }
+        pageCount: { type: integer, nullable: true }
+        posterPath: { type: string, nullable: true }
+        status: { type: string, enum: [draft, published, hidden], description: "Chỉ có khi người xem là nhân viên" }
+        genres:
+          type: array
+          items: { type: object, properties: { code: { type: string }, name: { type: string } } }
+        stats: { $ref: '#/components/schemas/Stats' }
+    TitleDetail:
+      allOf:
+        - { $ref: '#/components/schemas/TitleSummary' }
+        - type: object
+          properties:
+            synopsis: { type: string, nullable: true }
+            createdAt: { type: string }
+            credits:
+              type: array
+              items:
+                type: object
+                properties:
+                  personId: { type: integer }
+                  name: { type: string }
+                  role: { type: string, enum: [director, actor, writer, author] }
+                  order: { type: integer }
+            myRating: { type: integer, nullable: true, description: "Chỉ có khi đã đăng nhập" }
+    TitleInput:
+      type: object
+      required: [kind, title, releaseYear, genreIds]
+      properties:
+        kind: { type: string, enum: [movie, book] }
+        title: { type: string, maxLength: 200 }
+        originalTitle: { type: string, maxLength: 200, nullable: true }
+        releaseYear: { type: integer, minimum: 1850, maximum: 2100 }
+        runtimeMin: { type: integer, minimum: 1, maximum: 1000, description: "Bắt buộc với phim, cấm với sách" }
+        pageCount: { type: integer, minimum: 1, maximum: 20000, description: "Bắt buộc với sách, cấm với phim" }
+        synopsis: { type: string, maxLength: 5000, nullable: true }
+        status: { type: string, enum: [draft, published, hidden], default: published }
+        genreIds: { type: array, minItems: 1, maxItems: 5, items: { type: integer } }
+        credits:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [personId, role]
+            properties:
+              personId: { type: integer }
+              role: { type: string, enum: [director, actor, writer, author], description: "Phim: director, actor, writer. Sách: author" }
+              order: { type: integer, minimum: 1, maximum: 50, default: 1 }
+    RatingInput:
+      type: object
+      required: [score]
+      properties:
+        score: { type: integer, minimum: 1, maximum: 5 }
+    RatingResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            titleId: { type: integer }
+            score: { type: integer }
+            previousScore: { type: integer, nullable: true }
+            stats: { $ref: '#/components/schemas/Stats' }
+    AuditLog:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer, nullable: true }
+        userName: { type: string, nullable: true }
+        action: { type: string, example: RATING_UPSERT }
+        entity: { type: string, example: ratings }
+        entityId: { type: integer, nullable: true }
+        ip: { type: string, nullable: true }
+        createdAt: { type: string }

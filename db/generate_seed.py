@@ -42,10 +42,17 @@ import os
 import random
 import sys
 import unicodedata
+from decimal import Decimal, ROUND_HALF_UP
 
 M_MIN_VOTES = 25  # tham so m cua cong thuc xep hang co xet do tin cay
 
 # ------------------------------------------------------------------ tien ich
+
+
+def round_half_up(numerator, denominator, places):
+    """Lam tron nhu ROUND() cua MySQL (0,5 lam tron len), khong dung kieu 've so chan' cua Python."""
+    exp = Decimal(1).scaleb(-places)
+    return (Decimal(numerator) / Decimal(denominator)).quantize(exp, rounding=ROUND_HALF_UP)
 
 
 def strip_accents(s):
@@ -146,6 +153,7 @@ PERMS = [
     ("stats.read", "stats", "read"), ("stats.export", "stats", "export"),
     ("audit.read", "audit", "read"), ("user.manage", "user", "manage"),
     ("role.manage", "role", "manage"),
+    ("aggregate.rebuild", "aggregate", "rebuild"),
 ]
 ROLE_PERMS = {
     "ADMIN": [p[0] for p in PERMS],
@@ -505,8 +513,8 @@ def main():
         v, total = cnt.get(t["id"], 0), sm.get(t["id"], 0)
         if v:
             R = total / v
+            avg = Raw(str(round_half_up(total, v, 2)))
             ws = (v / (v + M_MIN_VOTES)) * R + (M_MIN_VOTES / (v + M_MIN_VOTES)) * C
-            avg = Raw("%.2f" % R)
         else:
             ws, avg = C, None
         aggregates.append((t["id"], v, total, avg, Raw("%.4f" % ws),
