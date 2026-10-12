@@ -13,7 +13,9 @@ class AggregateService {
                 ratingCount: Number(r.rating_count),
                 actualCount: Number(r.actual_count),
                 ratingSum: Number(r.rating_sum),
-                actualSum: Number(r.actual_sum)
+                actualSum: Number(r.actual_sum),
+                reviewCount: Number(r.review_count),
+                actualReviewCount: Number(r.actual_reviews)
             }))
         };
     }

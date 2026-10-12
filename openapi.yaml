@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Movie & Book Rating API
-  version: 1.1.0
+  version: 1.2.0
   description: >
     Hệ thống đánh giá và phân tích dữ liệu phim/sách (CSE702051, đề tài 11).
     Xác thực bằng cookie `accessToken` (HttpOnly) phát khi đăng nhập.
@@ -17,6 +17,9 @@ tags:
   - name: Xác thực
   - name: Danh mục
   - name: Đánh giá
+  - name: Bình luận
+  - name: Kiểm duyệt
+  - name: Cá nhân
   - name: Quản trị
 paths:
   /health:
@@ -269,6 +272,291 @@ paths:
         '200': { description: "Đã dựng lại" }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /titles/{id}/reviews:
+    parameters:
+      - { $ref: '#/components/parameters/TitleId' }
+    get:
+      tags: [Bình luận]
+      summary: Danh sách bình luận đã duyệt của tác phẩm (công khai)
+      description: "Chỉ gồm bình luận ở trạng thái approved. Kèm số phiếu hữu ích và phiếu của người đang xem (myVote) nếu đã đăng nhập."
+      security: [{}, { cookieAuth: [] }]
+      parameters:
+        - { name: sort, in: query, schema: { type: string, enum: [newest, helpful], default: newest } }
+        - { $ref: '#/components/parameters/Page' }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 10, description: Tối đa 50 } }
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/PublicReview' } }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      tags: [Bình luận]
+      summary: Gửi bình luận (quyền review.create). Trạng thái ban đầu là pending.
+      description: "Chỉ khi đã chấm điểm tác phẩm (RATING_REQUIRED, 403). Mỗi người một bình luận cho một tác phẩm (REVIEW_EXISTS, 409)."
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewInput' }
+            example: { body: Một bộ phim rất đáng xem, nhiều ý nghĩa. }
+      responses:
+        '201': { description: Đã gửi, đang chờ duyệt }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /titles/{id}/reviews/mine:
+    parameters:
+      - { $ref: '#/components/parameters/TitleId' }
+    get:
+      tags: [Bình luận]
+      summary: Bình luận của chính tôi về tác phẩm (mọi trạng thái)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Thành công }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Bình luận]
+      summary: Sửa bình luận của tôi (quyền review.update_own). Bình luận quay về pending.
+      description: "Bình luận đã bị ẩn không được sửa (REVIEW_HIDDEN, 403)."
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewInput' }
+      responses:
+        '200': { description: Đã cập nhật, đang chờ duyệt lại }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Bình luận]
+      summary: Xóa bình luận của tôi (quyền review.delete_own). Phiếu và báo cáo gắn với bình luận bị xóa theo.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Đã xóa }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /reviews/{id}/vote:
+    parameters:
+      - { $ref: '#/components/parameters/ReviewId' }
+    put:
+      tags: [Bình luận]
+      summary: Bình chọn hữu ích hoặc không hữu ích (quyền vote.create)
+      description: "Chỉ với bình luận đã duyệt (nếu không là 404). Không tự bình chọn bình luận của mình (OWN_REVIEW, 403). Mỗi người một phiếu; gửi lại là cập nhật."
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VoteInput' }
+            example: { vote: 1 }
+      responses:
+        '200': { description: Đã cập nhật phiếu }
+        '201': { description: Đã ghi nhận phiếu mới }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Bình luận]
+      summary: Bỏ phiếu của tôi
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Đã bỏ phiếu }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: "Bình luận không tồn tại hoặc chưa bình chọn (REVIEW_NOT_FOUND, VOTE_NOT_FOUND)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /reviews/{id}/reports:
+    parameters:
+      - { $ref: '#/components/parameters/ReviewId' }
+    post:
+      tags: [Bình luận]
+      summary: Báo cáo bình luận vi phạm (quyền report.create)
+      description: "Chỉ với bình luận đã duyệt. Không tự báo cáo (OWN_REVIEW, 403). Mỗi người một báo cáo cho một bình luận (REPORT_EXISTS, 409)."
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportInput' }
+            example: { reason: spam, detail: Quảng cáo }
+      responses:
+        '201': { description: Đã gửi báo cáo }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /moderation/reviews:
+    get:
+      tags: [Kiểm duyệt]
+      summary: Hàng đợi bình luận theo trạng thái (quyền review.moderate). Mặc định pending, cũ nhất trước.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected, hidden], default: pending } }
+        - { $ref: '#/components/parameters/Page' }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 20, description: Tối đa 50 } }
+      responses:
+        '200': { description: Thành công }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /moderation/reviews/{id}/moderate:
+    parameters:
+      - { $ref: '#/components/parameters/ReviewId' }
+    post:
+      tags: [Kiểm duyệt]
+      summary: Chuyển trạng thái bình luận theo máy trạng thái (quyền review.moderate)
+      description: "pending: approve hoặc reject. approved: hide. hidden: restore. Phép chuyển khác trả 422 INVALID_TRANSITION. Hai người duyệt cùng lúc được xếp hàng bằng khóa dòng: chỉ một người thành công."
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModerateInput' }
+            example: { action: reject, note: Nội dung chưa rõ ràng }
+      responses:
+        '200': { description: Đã chuyển trạng thái }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /moderation/reports:
+    get:
+      tags: [Kiểm duyệt]
+      summary: Hàng đợi báo cáo vi phạm theo trạng thái (quyền report.handle). Mặc định open.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved, dismissed], default: open } }
+        - { $ref: '#/components/parameters/Page' }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 20, description: Tối đa 50 } }
+      responses:
+        '200': { description: Thành công }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /moderation/reports/{id}/handle:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      tags: [Kiểm duyệt]
+      summary: Xử lý báo cáo đang mở (quyền report.handle)
+      description: "resolve: ẩn bình luận đang công khai và đóng mọi báo cáo mở về cùng bình luận. dismiss: chỉ đóng báo cáo này. Báo cáo đã đóng trả 422 REPORT_CLOSED."
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HandleInput' }
+            example: { decision: resolve }
+      responses:
+        '200': { description: Đã xử lý }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /me/reviews:
+    get:
+      tags: [Cá nhân]
+      summary: Bình luận của tôi, mọi trạng thái
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 10, description: Tối đa 50 } }
+      responses:
+        '200': { description: Thành công }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /me/watchlist:
+    get:
+      tags: [Cá nhân]
+      summary: Danh sách theo dõi của tôi (quyền watchlist.manage)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: listType, in: query, schema: { type: string, enum: [want, watching, done] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+      responses:
+        '200': { description: Thành công }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /me/watchlist/{titleId}:
+    parameters:
+      - { name: titleId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    put:
+      tags: [Cá nhân]
+      summary: Thêm hoặc đổi trạng thái theo dõi (quyền watchlist.manage)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WatchlistInput' }
+            example: { listType: watching }
+      responses:
+        '200': { description: Đã cập nhật }
+        '201': { description: Đã thêm }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Cá nhân]
+      summary: Bỏ khỏi danh sách theo dõi (quyền watchlist.manage)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Đã bỏ }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/notifications:
+    get:
+      tags: [Cá nhân]
+      summary: Thông báo của tôi (chỉ thấy thông báo của chính mình), kèm số chưa đọc
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: unread, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Page' }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 20, description: Tối đa 50 } }
+      responses:
+        '200': { description: Thành công }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /me/notifications/read-all:
+    post:
+      tags: [Cá nhân]
+      summary: Đánh dấu tất cả thông báo của tôi là đã đọc
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Đã cập nhật }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /me/notifications/{id}/read:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      tags: [Cá nhân]
+      summary: Đánh dấu một thông báo là đã đọc
+      description: "Thông báo không tồn tại hoặc của người khác cùng trả 404 NOTIFICATION_NOT_FOUND (chống IDOR)."
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Đã đánh dấu }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   securitySchemes:
     cookieAuth:
@@ -277,6 +565,11 @@ components:
       name: accessToken
   parameters:
     TitleId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    ReviewId:
       name: id
       in: path
       required: true
@@ -297,8 +590,11 @@ components:
     Forbidden:
       description: Không đủ quyền (FORBIDDEN) hoặc tài khoản bị khóa (ACCOUNT_DISABLED)
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: "Xung đột dữ liệu (REVIEW_EXISTS, REPORT_EXISTS, EMAIL_TAKEN)"
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
     NotFound:
-      description: Không tìm thấy (TITLE_NOT_FOUND, NOT_FOUND)
+      description: "Không tìm thấy (TITLE_NOT_FOUND, REVIEW_NOT_FOUND, REPORT_NOT_FOUND, NOT_FOUND)"
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
     ValidationFailed:
       description: Dữ liệu không hợp lệ (VALIDATION_FAILED), `details` liệt kê từng trường
@@ -457,3 +753,50 @@ components:
         entityId: { type: integer, nullable: true }
         ip: { type: string, nullable: true }
         createdAt: { type: string }
+    ReviewInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 10, maxLength: 2000, description: Lưu nguyên văn; giao diện phải mã hóa khi hiển thị }
+    PublicReview:
+      type: object
+      properties:
+        id: { type: integer }
+        body: { type: string }
+        authorName: { type: string }
+        authorScore: { type: integer, nullable: true, description: Điểm tác giả đã chấm cho tác phẩm }
+        createdAt: { type: string }
+        updatedAt: { type: string, nullable: true }
+        votes:
+          type: object
+          properties:
+            up: { type: integer }
+            down: { type: integer }
+        myVote: { type: integer, enum: [-1, 0, 1], description: Chỉ có khi đã đăng nhập }
+    VoteInput:
+      type: object
+      required: [vote]
+      properties:
+        vote: { type: integer, enum: [1, -1] }
+    ReportInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, enum: [spam, offensive, spoiler, off_topic, other] }
+        detail: { type: string, maxLength: 500, nullable: true }
+    ModerateInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [approve, reject, hide, restore] }
+        note: { type: string, maxLength: 200, nullable: true, description: Lý do, gửi kèm thông báo cho tác giả }
+    HandleInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [resolve, dismiss] }
+    WatchlistInput:
+      type: object
+      required: [listType]
+      properties:
+        listType: { type: string, enum: [want, watching, done] }

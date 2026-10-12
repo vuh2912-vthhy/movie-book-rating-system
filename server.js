@@ -11,6 +11,9 @@ const authRoutes = require('./src/routes/authRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
 const titleRoutes = require('./src/routes/titleRoutes');
 const genreRoutes = require('./src/routes/genreRoutes');
+const reviewRoutes = require('./src/routes/reviewRoutes');
+const moderationRoutes = require('./src/routes/moderationRoutes');
+const meRoutes = require('./src/routes/meRoutes');
 
 const app = express();
 
@@ -40,6 +43,9 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/titles', titleRoutes);
 app.use('/api/v1/genres', genreRoutes);
+app.use('/api/v1/reviews', reviewRoutes);
+app.use('/api/v1/moderation', moderationRoutes);
+app.use('/api/v1/me', meRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
