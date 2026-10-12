@@ -2,6 +2,7 @@
 const express = require('express');
 const TitleController = require('../controllers/titleController');
 const RatingController = require('../controllers/ratingController');
+const ReviewController = require('../controllers/reviewController');
 const { verifyToken, optionalAuth, authorize } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -19,5 +20,12 @@ router.delete('/:id', verifyToken, authorize('title.delete'), TitleController.re
 router.get('/:id/rating', verifyToken, RatingController.getMine);
 router.put('/:id/rating', verifyToken, authorize('rating.create'), RatingController.upsert);
 router.delete('/:id/rating', verifyToken, authorize('rating.delete_own'), RatingController.remove);
+
+// Bình luận về tác phẩm. Danh sách công khai chỉ gồm bình luận đã duyệt.
+router.get('/:id/reviews', optionalAuth, ReviewController.listPublic);
+router.post('/:id/reviews', verifyToken, authorize('review.create'), ReviewController.create);
+router.get('/:id/reviews/mine', verifyToken, ReviewController.getMine);
+router.put('/:id/reviews/mine', verifyToken, authorize('review.update_own'), ReviewController.updateMine);
+router.delete('/:id/reviews/mine', verifyToken, authorize('review.delete_own'), ReviewController.removeMine);
 
 module.exports = router;

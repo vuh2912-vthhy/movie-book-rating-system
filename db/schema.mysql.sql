@@ -22,6 +22,7 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS files;
 DROP TABLE IF EXISTS aggregates;
@@ -311,6 +312,22 @@ CREATE TABLE files (
   CONSTRAINT fk_files_title FOREIGN KEY (title_id) REFERENCES titles (id) ON DELETE SET NULL,
   CONSTRAINT chk_files_purpose CHECK (purpose IN ('poster')),
   CONSTRAINT chk_files_size CHECK (size_bytes > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Thong bao trong ung dung (duyet/tu choi/an binh luan, xu ly bao cao)
+CREATE TABLE notifications (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT UNSIGNED NOT NULL,
+  type       VARCHAR(32)     NOT NULL,
+  message    VARCHAR(500)    NOT NULL,
+  entity     VARCHAR(64)     NULL,
+  entity_id  BIGINT UNSIGNED NULL,
+  is_read    TINYINT(1)      NOT NULL DEFAULT 0,
+  created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_notifications_user_read_created (user_id, is_read, created_at),
+  CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT chk_notifications_type CHECK (type IN ('REVIEW_APPROVED','REVIEW_REJECTED','REVIEW_HIDDEN','REPORT_HANDLED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE audit_logs (

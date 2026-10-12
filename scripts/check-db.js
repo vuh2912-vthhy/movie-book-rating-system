@@ -41,10 +41,10 @@ const HINTS = {
         const [tables] = await db.query(
             'SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name'
         );
-        console.log(`     Số bảng trong CSDL: ${tables.length} (mong đợi 18)`);
+        console.log(`     Số bảng trong CSDL: ${tables.length} (mong đợi 19)`);
         if (tables.length) console.log(`     Gồm: ${tables.map((t) => t.name).join(', ')}`);
 
-        for (const name of ['users', 'roles', 'user_roles', 'permissions', 'role_permissions', 'audit_logs']) {
+        for (const name of ['users', 'roles', 'user_roles', 'permissions', 'role_permissions', 'audit_logs', 'notifications']) {
             try {
                 const [[row]] = await db.query(`SELECT COUNT(*) AS n FROM ${name}`);
                 console.log(`ĐẠT  ${name}: ${row.n} dòng`);

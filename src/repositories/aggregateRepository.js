@@ -3,15 +3,37 @@ const db = require('../config/database');
 const { withTransaction } = require('../utils/transaction');
 
 class AggregateRepository {
-    // Đối soát: bảng tổng hợp phải khớp với tổng hợp trực tiếp từ ratings. Kết quả rỗng = nhất quán.
+    // Giành khóa dòng tổng hợp của tác phẩm (tuần tự hóa mọi thay đổi liên quan tới tác phẩm đó).
+    // Thứ tự khóa thống nhất trong toàn hệ thống: aggregates trước, rồi mới tới ratings/reviews.
+    static async lock(conn, titleId) {
+        const [rows] = await conn.query('SELECT title_id FROM aggregates WHERE title_id = ? FOR UPDATE', [titleId]);
+        return rows.length > 0;
+    }
+
+    // Đếm lại số bình luận đã duyệt từ bảng gốc (không cộng trừ dồn nên không bị lệch)
+    static async recountReviews(conn, titleId) {
+        await conn.query(
+            `UPDATE aggregates
+             SET review_count = (SELECT COUNT(*) FROM reviews v WHERE v.title_id = ? AND v.status = 'approved'),
+                 updated_at = UTC_TIMESTAMP()
+             WHERE title_id = ?`,
+            [titleId, titleId]
+        );
+    }
+
+    // Đối soát: bảng tổng hợp phải khớp với tổng hợp trực tiếp từ ratings và reviews. Kết quả rỗng = nhất quán.
     static async findMismatches() {
         const [rows] = await db.query(
             `SELECT a.title_id, a.rating_count, COALESCE(x.c, 0) AS actual_count,
-                    a.rating_sum, COALESCE(x.s, 0) AS actual_sum
+                    a.rating_sum, COALESCE(x.s, 0) AS actual_sum,
+                    a.review_count,
+                    (SELECT COUNT(*) FROM reviews v WHERE v.title_id = a.title_id AND v.status = 'approved') AS actual_reviews
              FROM aggregates a
              LEFT JOIN (SELECT title_id, COUNT(*) AS c, SUM(score) AS s FROM ratings GROUP BY title_id) x
                     ON x.title_id = a.title_id
-             WHERE a.rating_count <> COALESCE(x.c, 0) OR a.rating_sum <> COALESCE(x.s, 0)
+             WHERE a.rating_count <> COALESCE(x.c, 0)
+                OR a.rating_sum <> COALESCE(x.s, 0)
+                OR a.review_count <> (SELECT COUNT(*) FROM reviews v WHERE v.title_id = a.title_id AND v.status = 'approved')
              ORDER BY a.title_id ASC`
         );
         return rows;
