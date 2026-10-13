@@ -154,11 +154,12 @@ PERMS = [
     ("audit.read", "audit", "read"), ("user.manage", "user", "manage"),
     ("role.manage", "role", "manage"),
     ("aggregate.rebuild", "aggregate", "rebuild"),
+    ("stats.analytics", "stats", "analytics"),
 ]
 ROLE_PERMS = {
     "ADMIN": [p[0] for p in PERMS],
     "MODERATOR": ["title.read", "title.create", "title.update", "file.upload",
-                  "review.read", "review.moderate", "report.handle", "stats.read"],
+                  "review.read", "review.moderate", "report.handle", "stats.read", "stats.analytics"],
     "USER": ["title.read", "rating.create", "rating.update_own", "rating.delete_own",
              "review.read", "review.create", "review.update_own", "review.delete_own",
              "vote.create", "watchlist.manage", "report.create", "stats.read"],

@@ -14,6 +14,7 @@ const genreRoutes = require('./src/routes/genreRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
 const moderationRoutes = require('./src/routes/moderationRoutes');
 const meRoutes = require('./src/routes/meRoutes');
+const statsRoutes = require('./src/routes/statsRoutes');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/v1/genres', genreRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/moderation', moderationRoutes);
 app.use('/api/v1/me', meRoutes);
+app.use('/api/v1/stats', statsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
