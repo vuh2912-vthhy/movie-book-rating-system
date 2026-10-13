@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Movie & Book Rating API
-  version: 1.2.0
+  version: 1.3.0
   description: >
     Hệ thống đánh giá và phân tích dữ liệu phim/sách (CSE702051, đề tài 11).
     Xác thực bằng cookie `accessToken` (HttpOnly) phát khi đăng nhập.
@@ -20,6 +20,7 @@ tags:
   - name: Bình luận
   - name: Kiểm duyệt
   - name: Cá nhân
+  - name: Thống kê
   - name: Quản trị
 paths:
   /health:
@@ -235,9 +236,15 @@ paths:
   /admin/system-logs:
     get:
       tags: [Quản trị]
-      summary: "Nhật ký hệ thống (quyền audit.read: chỉ ADMIN)"
+      summary: "Nhật ký hệ thống, có phân trang và bộ lọc (quyền audit.read: chỉ ADMIN)"
       security: [{ cookieAuth: [] }]
       parameters:
+        - { name: userId, in: query, description: "Người thực hiện", schema: { type: integer, minimum: 1 } }
+        - { name: action, in: query, description: "Hành động, ví dụ LOGIN_FAILED, REVIEW_APPROVE", schema: { type: string, pattern: '^[A-Z][A-Z_]{1,39}$' } }
+        - { name: entity, in: query, description: "Đối tượng bị tác động, ví dụ reviews", schema: { type: string, pattern: '^[a-z_]{2,40}$' } }
+        - { name: ip, in: query, schema: { type: string, maxLength: 45 } }
+        - { name: from, in: query, description: "YYYY-MM-DD hoặc YYYY-MM-DDTHH:MM:SS (UTC); chỉ ngày thì tính từ 00:00:00", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD hoặc YYYY-MM-DDTHH:MM:SS (UTC); chỉ ngày thì tính đến 23:59:59", schema: { type: string } }
         - { $ref: '#/components/parameters/Page' }
         - { name: size, in: query, schema: { type: integer, minimum: 1, default: 20, description: "Tối đa 100" } }
       responses:
@@ -557,6 +564,106 @@ paths:
         '200': { description: Đã đánh dấu }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /admin/system-logs/actions:
+    get:
+      tags: [Quản trị]
+      summary: "Danh sách các hành động đã ghi nhật ký (cho ô chọn bộ lọc; quyền audit.read)"
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Thành công" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /stats/ranking:
+    get:
+      tags: [Thống kê]
+      summary: "Bảng xếp hạng tác phẩm theo điểm có xét độ tin cậy (công khai)"
+      description: "source=aggregate đọc cột tổng hợp đã duy trì sẵn; source=live tính khi đọc trực tiếp từ bảng ratings (dùng để so sánh hiệu năng). Hai phương án cho cùng kết quả. Phản hồi có tiêu đề Server-Timing."
+      parameters:
+        - { name: source, in: query, schema: { type: string, enum: [aggregate, live], default: aggregate } }
+        - { name: kind, in: query, schema: { type: string, enum: [movie, book] } }
+        - { name: genre, in: query, description: "Mã thể loại", schema: { type: string, example: drama } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: "Thành công"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/RankingItem' } }
+                  meta:
+                    type: object
+                    properties:
+                      source: { type: string }
+                      minVotes: { type: integer }
+                      priorMean: { type: number }
+                      count: { type: integer }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /stats/genres:
+    get:
+      tags: [Thống kê]
+      summary: "Thống kê theo thể loại (quyền stats.analytics: MODERATOR, ADMIN)"
+      description: "Số tác phẩm đã công bố, số lượt chấm, điểm trung bình theo lượt chấm, số bình luận đã duyệt và tác phẩm đứng đầu (hàm cửa sổ ROW_NUMBER) của từng thể loại."
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [movie, book] } }
+      responses:
+        '200': { description: "Thành công" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /stats/timeline:
+    get:
+      tags: [Thống kê]
+      summary: "Thống kê theo thời gian (quyền stats.analytics). Kỳ không có dữ liệu được điền 0."
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: granularity, in: query, schema: { type: string, enum: [month, day], default: month } }
+        - { name: months, in: query, description: "Với granularity=month", schema: { type: integer, minimum: 1, maximum: 36, default: 12 } }
+        - { name: days, in: query, description: "Với granularity=day", schema: { type: integer, minimum: 1, maximum: 90, default: 30 } }
+        - { name: kind, in: query, schema: { type: string, enum: [movie, book] } }
+      responses:
+        '200': { description: "Thành công; data là danh sách kỳ, totals là tổng lượt chấm và bình luận" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /stats/overview:
+    get:
+      tags: [Thống kê]
+      summary: "Tổng quan hệ thống và hàng đợi kiểm duyệt (quyền stats.analytics)"
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Số người dùng, tác phẩm, lượt chấm, bình luận theo trạng thái, báo cáo theo trạng thái, bình luận chờ duyệt cũ nhất" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /stats/export:
+    get:
+      tags: [Thống kê]
+      summary: "Xuất báo cáo ra CSV hoặc Excel (quyền stats.export: chỉ ADMIN)"
+      description: "CSV theo RFC 4180: có BOM UTF-8, trường chứa dấu phân cách, nháy kép hoặc xuống dòng được bọc và thoát; chuỗi bắt đầu bằng = + - @ được vô hiệu hóa công thức. Excel dùng thư viện exceljs. Việc xuất được ghi nhật ký STATS_EXPORT."
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: report, in: query, required: true, schema: { type: string, enum: [genres, timeline, ranking, catalog, overview] } }
+        - { name: format, in: query, schema: { type: string, enum: [csv, xlsx], default: csv } }
+        - { name: delimiter, in: query, description: "Chỉ với CSV. semicolon phù hợp Excel tiếng Việt", schema: { type: string, enum: [comma, semicolon], default: comma } }
+        - { name: kind, in: query, schema: { type: string, enum: [movie, book] } }
+        - { name: source, in: query, description: "Với report=ranking", schema: { type: string, enum: [aggregate, live] } }
+        - { name: limit, in: query, description: "Với report=ranking", schema: { type: integer, minimum: 1, maximum: 50 } }
+        - { name: granularity, in: query, description: "Với report=timeline", schema: { type: string, enum: [month, day] } }
+        - { name: months, in: query, schema: { type: integer, minimum: 1, maximum: 36 } }
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90 } }
+      responses:
+        '200':
+          description: "Tệp báo cáo (tiêu đề Content-Disposition: attachment)"
+          content:
+            text/csv: { schema: { type: string } }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '501': { description: "Máy chủ chưa cài thư viện exceljs (XLSX_UNAVAILABLE)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 components:
   securitySchemes:
     cookieAuth:
@@ -800,3 +907,15 @@ components:
       required: [listType]
       properties:
         listType: { type: string, enum: [want, watching, done] }
+    RankingItem:
+      type: object
+      properties:
+        rank: { type: integer }
+        id: { type: integer }
+        code: { type: string }
+        kind: { type: string, enum: [movie, book] }
+        title: { type: string }
+        releaseYear: { type: integer }
+        ratingCount: { type: integer }
+        ratingAvg: { type: number, nullable: true }
+        weightedScore: { type: number, description: "Điểm xếp hạng (v*R + m*C) / (v + m)" }

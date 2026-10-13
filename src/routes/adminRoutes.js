@@ -6,8 +6,9 @@ const AggregateController = require('../controllers/aggregateController');
 
 const router = express.Router();
 
-// Nhật ký hệ thống (chỉ ADMIN: quyền audit.read)
+// Nhật ký hệ thống (chỉ ADMIN: quyền audit.read). Lọc theo userId, action, entity, ip, from, to.
 router.get('/system-logs', verifyToken, authorize('audit.read'), LogController.getLogs);
+router.get('/system-logs/actions', verifyToken, authorize('audit.read'), LogController.getActions);
 
 // Đối soát và dựng lại bảng tổng hợp xếp hạng (chỉ ADMIN: quyền aggregate.rebuild)
 router.get('/aggregates/reconcile', verifyToken, authorize('aggregate.rebuild'), AggregateController.reconcile);
