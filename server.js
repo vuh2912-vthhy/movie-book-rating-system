@@ -7,6 +7,8 @@ const env = require('./src/config/env'); // kiểm tra biến môi trường nga
 const db = require('./src/config/database');
 const { notFoundHandler, errorHandler } = require('./src/middlewares/errorHandler');
 
+const { securityHeaders, csrfProtection, authLimiter, apiLimiter } = require('./src/middlewares/securityMiddleware');
+
 const authRoutes = require('./src/routes/authRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
 const titleRoutes = require('./src/routes/titleRoutes');
@@ -15,15 +17,20 @@ const reviewRoutes = require('./src/routes/reviewRoutes');
 const moderationRoutes = require('./src/routes/moderationRoutes');
 const meRoutes = require('./src/routes/meRoutes');
 const statsRoutes = require('./src/routes/statsRoutes');
+const fileRoutes = require('./src/routes/fileRoutes');
 
 const app = express();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1); // phía sau proxy của Vercel: req.ip là IP thật của người dùng
 
+app.use(securityHeaders);                    // BM12 + BM2: thẻ tiêu đề bảo mật, CSP
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
+app.use('/api/v1', csrfProtection);          // BM3: chống giả mạo yêu cầu chéo trang
+app.use('/api/v1', apiLimiter);              // BM10: giới hạn tần suất chung
 
+app.use('/public', express.static(path.join(__dirname, 'public'), { maxAge: '1d', index: false }));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // Kiểm tra sống: dùng cho giám sát và để "làm nóng" hàm serverless trước giờ chấm
@@ -40,7 +47,7 @@ app.get('/api/v1/health', async (req, res) => {
     }
 });
 
-app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/titles', titleRoutes);
 app.use('/api/v1/genres', genreRoutes);
@@ -48,6 +55,7 @@ app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/moderation', moderationRoutes);
 app.use('/api/v1/me', meRoutes);
 app.use('/api/v1/stats', statsRoutes);
+app.use('/api/v1/files', fileRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

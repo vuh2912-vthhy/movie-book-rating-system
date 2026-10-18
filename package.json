@@ -1,11 +1,19 @@
 {
-  "name": "movie-book-rating-system-main",
+  "name": "movie-book-rating-system",
   "version": "1.0.0",
-  "description": "Dự án yêu cầu toàn bộ thành viên trong nhóm (V1-V5) phải cài đặt và sử dụng môi trường phát triển đồng nhất theo bảng tiêu chuẩn dưới đây:",
+  "description": "DT11 - He thong Danh gia va Phan tich Du lieu Phim/Sach (CSE702051). Node.js/Express, MySQL 8, 3 tang.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "smoke": "node scripts/smoke-auth.js"
+    "smoke": "node scripts/smoke-auth.js",
+    "dev": "node server.js",
+    "smoke:titles": "node scripts/smoke-titles.js",
+    "smoke:reviews": "node scripts/smoke-reviews.js",
+    "smoke:stats": "node scripts/smoke-stats.js",
+    "evidence": "node scripts/evidence.js",
+    "evidence:bm": "node scripts/bm-evidence.js",
+    "perf": "node scripts/perf-measure.js",
+    "pack": "bash scripts/pack.sh"
   },
   "keywords": [],
   "author": "",
@@ -24,5 +32,8 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
     "mysql2": "^3.24.4"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
