@@ -108,7 +108,10 @@ kids.forEach(appendKid);
         pager.append(page > 1 ? mk(page - 1, '← Trước') : '', el('span', { text: `Trang ${r.pagination.page}/${r.pagination.totalPages}` }), page < r.pagination.totalPages ? mk(page + 1, 'Sau →') : '');
     }
 
-    async function pageTitle(id) {
+    async function pageTitle(id, queryString = '') {
+        const query = new URLSearchParams(queryString);
+        const commentPage = Math.max(1, Number(query.get('commentPage') || 1));
+        const commentPageSize = 10;
         const t = (await api('GET', `/titles/${id}`)).data;
         const wrap = el('div', {});
         wrap.append(el('div', { class: 'card' }, el('h2', { text: t.title }),
@@ -127,10 +130,13 @@ kids.forEach(appendKid);
                 el('p', {}, el('button', { class: 'primary', text: 'Gửi bình luận', onclick: act(() => api('POST', `/titles/${id}/reviews`, { body: body.value }), 'Đã gửi, đang chờ duyệt') })),
                 el('div', { class: 'row' }, el('div', {}, el('label', { for: 'wl', text: 'Danh sách theo dõi' }), wl), el('button', { class: 'primary', text: 'Thêm vào danh sách', onclick: act(() => api('PUT', `/me/watchlist/${id}`, { listType: wl.value }), 'Đã cập nhật danh sách') }))));
         } else wrap.append(el('p', {}, el('a', { href: '#/login', text: 'Đăng nhập' }), ' để chấm điểm và bình luận.'));
-        const rv = (await api('GET', `/titles/${id}/reviews?size=20`)).data;
+        const reviewsResponse = await api('GET', `/titles/${id}/reviews?size=${commentPageSize}&page=${commentPage}`);
+        const rv = reviewsResponse.data || [];
+        const commentTotalPages = Math.max(1, Number(reviewsResponse.pagination && reviewsResponse.pagination.totalPages || 1));
         const sort = el('select', { id: 'review-sort', 'aria-label': 'Sắp xếp bình luận' },
             el('option', { value: 'newest', text: 'Mới nhất' }),
             el('option', { value: 'stars', text: 'Số sao cao đến thấp' }));
+        sort.value = query.get('commentSort') || 'newest';
         const list = el('div', { class: 'card review-list' },
             el('div', { class: 'review-list__header' }, el('h3', { text: `Bình luận (${rv.length})` }),
                 el('div', {}, el('label', { for: 'review-sort', text: 'Sắp xếp' }), sort)));
@@ -146,9 +152,23 @@ kids.forEach(appendKid);
                 me ? el('p', {}, el('button', { class: 'link', text: `Hữu ích (${r.votes.up})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
                     el('button', { class: 'link', text: 'Báo cáo vi phạm', onclick: async () => { try { await api('POST', `/reviews/${r.id}/reports`, { reason: 'spam' }); toast('Đã gửi báo cáo'); } catch (e) { toast(e.message); } } })) : null));
         };
-        sort.addEventListener('change', renderReviews);
+        sort.addEventListener('change', () => {
+            const next = new URLSearchParams(query);
+            next.set('commentSort', sort.value);
+            next.set('commentPage', '1');
+            location.hash = `#/title/${id}?${next}`;
+        });
         renderReviews();
-        wrap.append(list);
+        const pager = el('div', { class: 'pager', 'aria-label': 'Phân trang bình luận' });
+        const makeCommentPageLink = (page, label) => {
+            const next = new URLSearchParams(query);
+            next.set('commentPage', String(page));
+            return el('a', { href: `#/title/${id}?${next}`, text: label });
+        };
+        if (commentPage > 1) pager.append(makeCommentPageLink(commentPage - 1, '← Trước'));
+        pager.append(el('span', { text: `${commentPage}/${commentTotalPages}`, 'aria-label': `Trang ${commentPage} trên ${commentTotalPages}` }));
+        if (commentPage < commentTotalPages) pager.append(makeCommentPageLink(commentPage + 1, 'Sau →'));
+        wrap.append(list, pager);
         main.replaceChildren(wrap);
     }
 
@@ -234,7 +254,7 @@ kids.forEach(appendKid);
             if (!parts.length) await pageList(qs || '');
             else if (parts[0] === 'login') pageLogin();
             else if (parts[0] === 'register') pageRegister();
-            else if (parts[0] === 'title') await pageTitle(Number(parts[1]));
+            else if (parts[0] === 'title') await pageTitle(Number(parts[1]), qs || '');
             else if (parts[0] === 'ranking') await pageRanking();
             else if (parts[0] === 'watchlist') await pageWatchlist();
             else if (parts[0] === 'moderation') await pageModeration(qs || '');
