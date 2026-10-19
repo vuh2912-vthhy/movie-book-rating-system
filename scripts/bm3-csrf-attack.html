@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"><title>BM3 - trang giả mạo yêu cầu (chỉ thử trên hệ thống của nhóm)</title>
+<style>body{font-family:system-ui,Arial;max-width:760px;margin:24px auto;line-height:1.5} input{width:100%;padding:8px} button{padding:9px 16px;margin-top:10px}</style></head>
+<body>
+<h1>BM3 - Trang "tấn công" CSRF giả lập</h1>
+<p>Cách dùng: (1) đăng nhập hệ thống của nhóm ở một thẻ trình duyệt khác; (2) mở tệp này từ máy bạn (địa chỉ <code>file://</code>, tức khác nguồn gốc); (3) nhập địa chỉ hệ thống của NHÓM bạn; (4) bấm nút.
+Yêu cầu giả mạo là <code>POST /api/v1/auth/logout</code> (thao tác thay đổi trạng thái, vô hại). <strong>Chỉ thử trên hệ thống do nhóm phát triển.</strong></p>
+<label for="u">Địa chỉ hệ thống của nhóm (không có dấu / ở cuối):</label>
+<input id="u" value="https://movie-book-rating-system.vercel.app">
+<form id="f" method="POST" enctype="text/plain" target="_blank"><input type="hidden" name="x" value="1"></form>
+<button id="go">Gửi yêu cầu giả mạo</button>
+<p>Kết quả hiện ở thẻ trình duyệt mới mở ra (chụp ảnh thẻ đó, thấy rõ địa chỉ). Kỳ vọng: <code>401 UNAUTHENTICATED</code>, vì cookie phiên đặt SameSite=Strict nên trình duyệt KHÔNG gửi cookie kèm yêu cầu từ trang khác; ngay cả khi cookie bị gửi, máy chủ còn kiểm tra Origin và trả <code>403 CSRF_BLOCKED</code>.
+Sau đó quay lại thẻ đã đăng nhập, tải lại trang: phiên vẫn còn nguyên (yêu cầu giả mạo không có tác dụng).</p>
+
+<script>
+document.getElementById('go').onclick = function(){
+  var f = document.getElementById('f'); f.action = document.getElementById('u').value.replace(/\/+$/,'') + '/api/v1/auth/logout'; f.submit();
+};
+</script></body></html>
