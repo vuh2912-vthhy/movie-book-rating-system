@@ -152,22 +152,47 @@ kids.forEach(appendKid);
         main.replaceChildren(el('h2', { text: 'Danh sách theo dõi của tôi' }), box);
     }
 
-    async function pageModeration() {
-        const rv = await api('GET', '/moderation/reviews?status=pending&size=20');
+    async function pageModeration(queryString = '') {
+        const q = new URLSearchParams(queryString);
+        const reviewPage = Math.max(1, Number(q.get('reviewPage') || 1));
+        const reportPage = Math.max(1, Number(q.get('reportPage') || 1));
+        const pageSize = 10;
+        const rv = await api('GET', `/moderation/reviews?status=pending&size=${pageSize}&page=${reviewPage}`);
         const box = el('div', {}); if (!rv.data.length) box.append(el('p', { text: 'Không có bình luận chờ duyệt.' }));
         for (const r of rv.data) {
             const decide = (action) => async () => { try { await api('POST', `/moderation/reviews/${r.id}/moderate`, { action }); toast('Đã xử lý'); route(); } catch (e) { toast(e.message); } };
             box.append(el('div', { class: 'card' }, el('p', { class: 'muted', text: `#${r.id} · ${r.authorName || r.displayName || ''} · ${r.titleName || r.title || ''}` }), el('p', { text: r.body }),
                 el('button', { class: 'primary', text: 'Duyệt', onclick: decide('approve') }), ' ', el('button', { class: 'danger', text: 'Từ chối', onclick: decide('reject') })));
         }
-        const rp = await api('GET', '/moderation/reports?status=open&size=20');
+        const reviewTotalPages = Math.max(1, Number(rv.pagination && rv.pagination.totalPages || 1));
+        const makePager = (currentPage, totalPages, pageKey) => {
+            const pager = el('div', { class: 'pager', 'aria-label': 'Phân trang' });
+            const makeLink = (page, label) => {
+                const next = new URLSearchParams(location.hash.split('?')[1] || '');
+                next.set(pageKey, String(page));
+                return el('a', { href: '#/moderation?' + next, text: label });
+            };
+            if (currentPage > 1) pager.append(makeLink(currentPage - 1, '← Trước'));
+            pager.append(el('span', { text: `${currentPage}/${totalPages}`, 'aria-label': `Trang ${currentPage} trên ${totalPages}` }));
+            if (currentPage < totalPages) pager.append(makeLink(currentPage + 1, 'Sau →'));
+            return pager;
+        };
+        const rp = await api('GET', `/moderation/reports?status=open&size=${pageSize}&page=${reportPage}`);
         const rbox = el('div', {}); if (!rp.data.length) rbox.append(el('p', { text: 'Không có báo cáo mở.' }));
         for (const x of rp.data) {
             const handle = (decision) => async () => { try { await api('POST', `/moderation/reports/${x.id}/handle`, { decision }); toast('Đã xử lý'); route(); } catch (e) { toast(e.message); } };
             rbox.append(el('div', { class: 'card' }, el('p', { class: 'muted', text: `Báo cáo #${x.id} · lý do: ${x.reason}` }), el('p', { text: x.reviewBody || x.body || '' }),
                 el('button', { class: 'danger', text: 'Xác nhận vi phạm', onclick: handle('resolve') }), ' ', el('button', { class: 'primary', text: 'Bác bỏ', onclick: handle('dismiss') })));
         }
-        main.replaceChildren(el('h2', { text: 'Hàng đợi bình luận' }), box, el('h2', { text: 'Báo cáo vi phạm' }), rbox);
+        const reportTotalPages = Math.max(1, Number(rp.pagination && rp.pagination.totalPages || 1));
+        main.replaceChildren(
+            el('h2', { text: 'Hàng đợi bình luận' }),
+            box,
+            makePager(reviewPage, reviewTotalPages, 'reviewPage'),
+            el('h2', { text: 'Báo cáo vi phạm' }),
+            rbox,
+            makePager(reportPage, reportTotalPages, 'reportPage')
+        );
     }
 
     async function pageStats() {
@@ -198,7 +223,7 @@ kids.forEach(appendKid);
             else if (parts[0] === 'title') await pageTitle(Number(parts[1]));
             else if (parts[0] === 'ranking') await pageRanking();
             else if (parts[0] === 'watchlist') await pageWatchlist();
-            else if (parts[0] === 'moderation') await pageModeration();
+            else if (parts[0] === 'moderation') await pageModeration(qs || '');
             else if (parts[0] === 'stats') await pageStats();
             else if (parts[0] === 'logs') await pageLogs();
             else main.replaceChildren(el('p', { text: 'Không tìm thấy trang.' }));
