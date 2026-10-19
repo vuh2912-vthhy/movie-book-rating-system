@@ -563,20 +563,60 @@ canvas {
 }
 
 @media (max-width: 760px) {
-    header { align-items: flex-start; padding: 13px 18px; }
-    header h1 { width: 100%; }
-    nav { width: 100%; margin-left: 0; }
-    nav a, nav button { padding: 6px 10px; font-size: .84rem; }
-    nav .badge { max-width: 100%; }
-    main { width: min(100% - 28px, 1120px); padding-top: 34px; }
-    main > h2 { font-size: clamp(2rem, 11vw, 3rem); }
-    .card { padding: 17px; }
+    body { overflow-x: hidden; }
+    header { align-items: flex-start; padding: 12px 14px; }
+    header h1 { width: 100%; gap: 8px; font-size: 1.08rem; }
+    header h1::before { width: 28px; height: 28px; flex: 0 0 28px; }
+    nav {
+        width: calc(100% + 4px);
+        margin-left: -2px;
+        padding-bottom: 2px;
+        gap: 5px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: thin;
+    }
+    nav a, nav button { min-height: 40px; padding: 8px 11px; font-size: .84rem; white-space: nowrap; }
+    nav .badge { flex: 0 0 auto; max-width: 170px; }
+    main { width: calc(100% - 24px); padding: 28px 0 48px; }
+    main > h2 { max-width: 100%; margin-bottom: 20px; font-size: clamp(1.85rem, 10vw, 2.7rem); line-height: 1.12; }
+    main > h2::after { margin-top: 12px; }
+    .card { padding: 16px; border-radius: 12px; }
+    .card p { line-height: 1.6; }
+    .grid { grid-template-columns: 1fr; gap: 12px; }
+    .grid .card { min-height: 0; padding: 18px; }
+    .row { align-items: stretch; gap: 8px; }
+    .row > *, .row > button { flex: 1 1 100%; }
+    button.primary, button.danger { min-height: 44px; width: 100%; }
+    button.link { min-height: 40px; padding: 8px 6px; }
+    .review-item .report-reason { min-height: 40px; margin: 4px 5px 4px 0; }
+    .review-item .report-reason + .link { display: inline-block; width: auto; }
     .review-list__header { align-items: stretch; flex-direction: column; gap: 10px; }
     .review-controls { flex-direction: column; align-items: stretch; gap: 4px; }
     .review-controls > div { min-width: 0; }
     .review-list__header select { min-width: 0; }
-    table { display: block; overflow-x: auto; white-space: nowrap; }
+    .report-filter { max-width: none; }
+    .report-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .report-stat { min-height: 54px; padding: 10px; }
+    .report-stat__label { font-size: .78rem; }
+    .report-stat__count { font-size: 1.1rem; }
+    .report-reason-legend { line-height: 1.8; }
+    table { display: block; max-width: 100%; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
     th, td { padding: 11px 12px; }
+    .pager { gap: 10px; margin: 18px 0; }
+    .pager a { min-height: 40px; padding: 8px 12px; }
+    #toast { right: 12px; bottom: 12px; max-width: calc(100vw - 24px); }
+    footer { padding: 24px 14px 30px; }
+}
+
+@media (max-width: 420px) {
+    main { width: calc(100% - 20px); }
+    header h1 { font-size: 1rem; }
+    nav a, nav button { padding-inline: 9px; font-size: .8rem; }
+    .report-stats { grid-template-columns: 1fr; }
+    .review-item .report-reason,
+    .review-item .report-reason + .link { width: 100%; margin: 4px 0; }
+    .pager span { font-size: .9rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
