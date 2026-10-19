@@ -173,10 +173,26 @@ kids.forEach(appendKid);
     }
 
     async function pageRanking() {
-        const r = await api('GET', '/stats/ranking?limit=20');
-        const tb = el('tbody', {}); r.data.forEach((x, i) => tb.append(el('tr', {}, el('td', { text: i + 1 }), el('td', {}, el('a', { href: `#/title/${x.id}`, text: x.title })), el('td', { text: x.ratingCount }), el('td', { text: x.ratingAvg ?? '-' }), el('td', { text: x.weightedScore }))));
-        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng (điểm có xét độ tin cậy – Bayes)' }), el('p', { class: 'muted', text: 'weighted = (v·R + m·C) / (v + m): tác phẩm ít lượt chấm bị kéo về điểm trung bình toàn hệ thống.' }),
-            el('table', {}, el('caption', { class: 'muted', text: 'Top 20' }), el('thead', {}, el('tr', {}, ['#', 'Tác phẩm', 'Lượt chấm', 'Trung bình', 'Điểm xếp hạng'].map((h) => el('th', { scope: 'col', text: h })))), tb));
+        const [movies, books] = await Promise.all([
+            api('GET', '/stats/ranking?limit=20&kind=movie'),
+            api('GET', '/stats/ranking?limit=20&kind=book')
+        ]);
+        const rankingTable = (title, items) => {
+            const tb = el('tbody', {});
+            if (!items.length) tb.append(el('tr', {}, el('td', { colspan: '5', class: 'muted', text: 'Chưa có dữ liệu xếp hạng.' })));
+            items.forEach((x, i) => tb.append(el('tr', {},
+                el('td', { text: i + 1 }),
+                el('td', {}, el('a', { href: `#/title/${x.id}`, text: x.title })),
+                el('td', { text: x.ratingCount }),
+                el('td', { text: x.ratingAvg ?? '-' }),
+                el('td', { text: x.weightedScore }))));
+            return el('section', { class: 'ranking-section' },
+                el('h3', { text: title }),
+                el('table', {}, el('caption', { class: 'muted', text: 'Top 20' }),
+                    el('thead', {}, el('tr', {}, ['#', 'Tác phẩm', 'Lượt chấm', 'Trung bình', 'Điểm xếp hạng'].map((h) => el('th', { scope: 'col', text: h })))), tb));
+        };
+        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng' }), el('p', { class: 'muted', text: 'Điểm xếp hạng có xét độ tin cậy theo công thức Bayes: tác phẩm ít lượt chấm sẽ được điều chỉnh về điểm trung bình toàn hệ thống.' }),
+            rankingTable('Phim', movies.data || []), rankingTable('Sách', books.data || []));
     }
 
     async function pageWatchlist() {
