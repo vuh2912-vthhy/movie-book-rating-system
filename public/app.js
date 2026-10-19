@@ -4,6 +4,7 @@
     const $ = (sel) => document.querySelector(sel);
     const main = $('#main');
     let me = null;
+    let toastTimer = null;
 
     const el = (tag, props = {}, ...kids) => {
         const n = document.createElement(tag);
@@ -29,7 +30,13 @@
 kids.forEach(appendKid);
         return n;
     };
-    const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 3200); };
+    const toast = (msg) => {
+        const t = $('#toast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3200);
+    };
 
     async function api(method, path, body) {
         const opt = { method, headers: {}, credentials: 'same-origin' };
@@ -39,7 +46,6 @@ kids.forEach(appendKid);
         if (!res.ok) { const e = new Error((json && json.error && json.error.message) || `Lỗi ${res.status}`); e.status = res.status; e.details = json && json.error && json.error.details; throw e; }
         return json;
     }
-    const can = (p) => me && me.permissions && me.permissions.includes(p);
     const isStaff = () => me && me.roles && (me.roles.includes('ADMIN') || me.roles.includes('MODERATOR'));
     const stars = (n) => (n === null || n === undefined ? 'Chưa có' : `${Number(n).toFixed(2)} / 5`);
 
@@ -112,7 +118,12 @@ kids.forEach(appendKid);
         const query = new URLSearchParams(queryString);
         const commentPage = Math.max(1, Number(query.get('commentPage') || 1));
         const commentPageSize = 10;
-        const t = (await api('GET', `/titles/${id}`)).data;
+        const [titleResponse, reviewsResponse, ratingResponse] = await Promise.all([
+            api('GET', `/titles/${id}`),
+            api('GET', `/titles/${id}/reviews?size=${commentPageSize}&page=${commentPage}`),
+            me ? api('GET', `/titles/${id}/rating`).catch(() => ({ data: null })) : Promise.resolve({ data: null })
+        ]);
+        const t = titleResponse.data;
         const wrap = el('div', {});
         wrap.append(el('div', { class: 'card' }, el('h2', { text: t.title }),
             el('p', { class: 'muted', text: `${t.kind === 'movie' ? 'Phim' : 'Sách'} · ${t.releaseYear}` }),
@@ -122,7 +133,8 @@ kids.forEach(appendKid);
             const sel = el('select', { id: 'score' }, [1, 2, 3, 4, 5].map((n) => el('option', { value: n, text: `${n} sao` })));
             const wl = el('select', { id: 'wl' }, el('option', { value: 'want', text: 'Muốn xem/đọc' }), el('option', { value: 'watching', text: 'Đang xem/đọc' }), el('option', { value: 'done', text: 'Đã xem/đọc' }));
             const body = el('textarea', { id: 'body', rows: '3', maxlength: '2000', placeholder: 'Bình luận (tối thiểu 10 ký tự, sẽ được kiểm duyệt)' });
-            try { const mine = (await api('GET', `/titles/${id}/rating`)).data; if (mine && mine.score) sel.value = mine.score; } catch (e) { /* chưa chấm */ }
+            const mine = ratingResponse.data;
+            if (mine && mine.score) sel.value = mine.score;
             const act = (fn, okMsg) => async () => { try { await fn(); toast(okMsg); route(); } catch (e) { toast(e.message); } };
             wrap.append(el('div', { class: 'card' }, el('h3', { text: 'Đánh giá của bạn' }),
                 el('div', { class: 'row' }, el('div', {}, el('label', { for: 'score', text: 'Điểm' }), sel), el('button', { class: 'primary', text: 'Lưu điểm', onclick: act(() => api('PUT', `/titles/${id}/rating`, { score: Number(sel.value) }), 'Đã lưu điểm') })),
@@ -130,34 +142,55 @@ kids.forEach(appendKid);
                 el('p', {}, el('button', { class: 'primary', text: 'Gửi bình luận', onclick: act(() => api('POST', `/titles/${id}/reviews`, { body: body.value }), 'Đã gửi, đang chờ duyệt') })),
                 el('div', { class: 'row' }, el('div', {}, el('label', { for: 'wl', text: 'Danh sách theo dõi' }), wl), el('button', { class: 'primary', text: 'Thêm vào danh sách', onclick: act(() => api('PUT', `/me/watchlist/${id}`, { listType: wl.value }), 'Đã cập nhật danh sách') }))));
         } else wrap.append(el('p', {}, el('a', { href: '#/login', text: 'Đăng nhập' }), ' để chấm điểm và bình luận.'));
-        const reviewsResponse = await api('GET', `/titles/${id}/reviews?size=${commentPageSize}&page=${commentPage}`);
         const rv = reviewsResponse.data || [];
         const commentTotalPages = Math.max(1, Number(reviewsResponse.pagination && reviewsResponse.pagination.totalPages || 1));
         const sort = el('select', { id: 'review-sort', 'aria-label': 'Sắp xếp bình luận' },
             el('option', { value: 'newest', text: 'Mới nhất' }),
             el('option', { value: 'stars', text: 'Số sao cao đến thấp' }));
+        const scoreFilter = el('select', { id: 'review-score-filter', 'aria-label': 'Lọc bình luận theo số sao' },
+            el('option', { value: '', text: 'Tất cả số sao' }),
+            ...[5, 4, 3, 2, 1].map((n) => el('option', { value: n, text: `${n} sao` })));
         sort.value = query.get('commentSort') || 'newest';
+        scoreFilter.value = query.get('commentScore') || '';
         const list = el('div', { class: 'card review-list' },
-            el('div', { class: 'review-list__header' }, el('h3', { text: `Bình luận (${rv.length})` }),
-                el('div', {}, el('label', { for: 'review-sort', text: 'Sắp xếp' }), sort)));
+            el('div', { class: 'review-list__header' },
+                el('h3', { text: `Bình luận (${rv.length})` }),
+                el('div', { class: 'review-controls' },
+                    el('div', {}, el('label', { for: 'review-sort', text: 'Sắp xếp' }), sort),
+                    el('div', {}, el('label', { for: 'review-score-filter', text: 'Lọc theo sao' }), scoreFilter))));
         const renderReviews = () => {
             list.querySelectorAll('.review-item').forEach((item) => item.remove());
-            const sorted = [...rv].sort((a, b) => {
+            const selectedScore = scoreFilter.value ? Number(scoreFilter.value) : null;
+            const filtered = selectedScore === null
+                ? rv
+                : rv.filter((review) => Number(review.authorScore) === selectedScore);
+            const sorted = [...filtered].sort((a, b) => {
                 if (sort.value === 'stars') return Number(b.authorScore || 0) - Number(a.authorScore || 0);
                 return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
             });
-            for (const r of sorted) list.append(el('div', { class: 'card review-item' },
+            list.querySelector('h3').textContent = `Bình luận (${sorted.length})`;
+            if (!sorted.length) {
+                list.append(el('p', { class: 'muted review-empty', text: 'Không có bình luận phù hợp với bộ lọc này.' }));
+                return;
+            }
+            const fragment = document.createDocumentFragment();
+            for (const r of sorted) fragment.append(el('div', { class: 'card review-item' },
                 el('p', { class: 'muted review-meta', text: `${r.authorName}${r.authorScore ? ' · ' + r.authorScore + ' sao' : ''} · ${r.createdAt}` }),
                 el('p', { class: 'review-body', text: r.body }),   // textContent: chuỗi <script> hiển thị nguyên văn
                 me ? el('p', {}, el('button', { class: 'link', text: `Hữu ích (${r.votes.up})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
                     el('button', { class: 'link', text: 'Báo cáo vi phạm', onclick: async () => { try { await api('POST', `/reviews/${r.id}/reports`, { reason: 'spam' }); toast('Đã gửi báo cáo'); } catch (e) { toast(e.message); } } })) : null));
+            list.append(fragment);
         };
-        sort.addEventListener('change', () => {
+        const updateReviewQuery = () => {
             const next = new URLSearchParams(query);
             next.set('commentSort', sort.value);
+            if (scoreFilter.value) next.set('commentScore', scoreFilter.value);
+            else next.delete('commentScore');
             next.set('commentPage', '1');
             location.hash = `#/title/${id}?${next}`;
-        });
+        };
+        sort.addEventListener('change', updateReviewQuery);
+        scoreFilter.addEventListener('change', updateReviewQuery);
         renderReviews();
         const pager = el('div', { class: 'pager', 'aria-label': 'Phân trang bình luận' });
         const makeCommentPageLink = (page, label) => {
@@ -172,11 +205,16 @@ kids.forEach(appendKid);
         main.replaceChildren(wrap);
     }
 
-    async function pageRanking() {
-        const [movies, books] = await Promise.all([
-            api('GET', '/stats/ranking?limit=20&kind=movie'),
-            api('GET', '/stats/ranking?limit=20&kind=book')
-        ]);
+    async function pageRanking(queryString = '') {
+        const query = new URLSearchParams(queryString);
+        const selectedKind = query.get('kind') === 'book' ? 'book' : 'movie';
+        const selectedLabel = selectedKind === 'book' ? 'Sách' : 'Phim';
+        const r = await api('GET', `/stats/ranking?limit=20&kind=${selectedKind}`);
+        const kind = el('select', { id: 'ranking-kind', 'aria-label': 'Chọn loại xếp hạng' },
+            el('option', { value: 'movie', text: 'Phim' }),
+            el('option', { value: 'book', text: 'Sách' }));
+        kind.value = selectedKind;
+        kind.addEventListener('change', () => { location.hash = `#/ranking?kind=${kind.value}`; });
         const rankingTable = (title, items) => {
             const tb = el('tbody', {});
             if (!items.length) tb.append(el('tr', {}, el('td', { colspan: '5', class: 'muted', text: 'Chưa có dữ liệu xếp hạng.' })));
@@ -191,8 +229,10 @@ kids.forEach(appendKid);
                 el('table', {}, el('caption', { class: 'muted', text: 'Top 20' }),
                     el('thead', {}, el('tr', {}, ['#', 'Tác phẩm', 'Lượt chấm', 'Trung bình', 'Điểm xếp hạng'].map((h) => el('th', { scope: 'col', text: h })))), tb));
         };
-        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng' }), el('p', { class: 'muted', text: 'Điểm xếp hạng có xét độ tin cậy theo công thức Bayes: tác phẩm ít lượt chấm sẽ được điều chỉnh về điểm trung bình toàn hệ thống.' }),
-            rankingTable('Phim', movies.data || []), rankingTable('Sách', books.data || []));
+        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng' }),
+            el('div', { class: 'card ranking-filter' }, el('label', { for: 'ranking-kind', text: 'Xếp hạng theo' }), kind),
+            el('p', { class: 'muted', text: 'Điểm xếp hạng có xét độ tin cậy theo công thức Bayes: tác phẩm ít lượt chấm sẽ được điều chỉnh về điểm trung bình toàn hệ thống.' }),
+            rankingTable(selectedLabel, r.data || []));
     }
 
     async function pageWatchlist() {
@@ -271,7 +311,7 @@ kids.forEach(appendKid);
             else if (parts[0] === 'login') pageLogin();
             else if (parts[0] === 'register') pageRegister();
             else if (parts[0] === 'title') await pageTitle(Number(parts[1]), qs || '');
-            else if (parts[0] === 'ranking') await pageRanking();
+            else if (parts[0] === 'ranking') await pageRanking(qs || '');
             else if (parts[0] === 'watchlist') await pageWatchlist();
             else if (parts[0] === 'moderation') await pageModeration(qs || '');
             else if (parts[0] === 'stats') await pageStats();

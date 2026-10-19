@@ -21,6 +21,7 @@
     --radius-sm: 8px;
     --radius-md: 14px;
     --radius-lg: 22px;
+    --font-ui: Arial, "Helvetica Neue", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -30,7 +31,7 @@ html { scroll-behavior: smooth; }
 body {
     margin: 0;
     min-width: 320px;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: var(--font-ui);
     background:
         radial-gradient(circle at 10% 0%, rgba(216,155,61,.12), transparent 28rem),
         linear-gradient(180deg, #f8f5ef 0%, var(--bg) 42%, #f0ebe3 100%);
@@ -38,7 +39,8 @@ body {
     line-height: 1.6;
     letter-spacing: normal;
     word-spacing: normal;
-    font-kerning: normal;
+    font-kerning: none;
+    font-variant-ligatures: none;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -97,7 +99,7 @@ header h1 {
     align-items: center;
     gap: 11px;
     margin: 0;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: var(--font-ui);
     font-size: clamp(1.1rem, 2vw, 1.38rem);
     letter-spacing: normal;
     white-space: nowrap;
@@ -178,7 +180,7 @@ main > h2 {
     max-width: 760px;
     margin: 0 0 24px;
     color: var(--brand-deep);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: var(--font-ui);
     font-size: clamp(2rem, 5vw, 3.5rem);
     font-weight: 700;
     letter-spacing: normal;
@@ -189,7 +191,7 @@ h2, h3 { text-wrap: normal; word-spacing: normal; }
 h3 {
     margin-top: 0;
     color: var(--brand);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: var(--font-ui);
     line-height: 1.25;
 }
 
@@ -241,6 +243,16 @@ main > h2::after {
 .review-list__header label { margin-top: 0; }
 .review-list__header select { min-width: 190px; }
 
+.review-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 12px;
+}
+
+.review-controls > div { min-width: 170px; }
+.review-empty { margin: 4px 0 0 !important; padding: 14px; background: var(--bg-soft); border-radius: var(--radius-sm); }
+
 .review-item {
     margin-bottom: 12px;
     padding: 16px 18px;
@@ -288,6 +300,13 @@ main > h2::after {
 .ranking-section { margin-top: 28px; }
 .ranking-section h3 { margin: 0 0 12px; font-size: 1.35rem; }
 
+.ranking-filter {
+    max-width: 360px;
+    padding: 14px 16px;
+}
+
+.ranking-filter label { margin-top: 0; }
+
 .muted { color: var(--muted); font-size: .92rem; }
 
 label {
@@ -296,7 +315,7 @@ label {
     color: var(--brand);
     font-size: .84rem;
     font-weight: 800;
-    letter-spacing: .01em;
+    letter-spacing: normal;
     text-transform: uppercase;
 }
 
@@ -411,7 +430,7 @@ th {
     color: #fffaf0;
     background: var(--brand);
     font-size: .78rem;
-    letter-spacing: .06em;
+    letter-spacing: normal;
     text-transform: uppercase;
 }
 
@@ -490,6 +509,8 @@ canvas {
     main > h2 { font-size: clamp(2rem, 11vw, 3rem); }
     .card { padding: 17px; }
     .review-list__header { align-items: stretch; flex-direction: column; gap: 10px; }
+    .review-controls { flex-direction: column; align-items: stretch; gap: 4px; }
+    .review-controls > div { min-width: 0; }
     .review-list__header select { min-width: 0; }
     table { display: block; overflow-x: auto; white-space: nowrap; }
     th, td { padding: 11px 12px; }
