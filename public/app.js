@@ -48,6 +48,14 @@ kids.forEach(appendKid);
     }
     const isStaff = () => me && me.roles && (me.roles.includes('ADMIN') || me.roles.includes('MODERATOR'));
     const stars = (n) => (n === null || n === undefined ? 'Chưa có' : `${Number(n).toFixed(2)} / 5`);
+    const REPORT_REASONS = [
+        { value: 'spam', label: 'Spam' },
+        { value: 'offensive', label: 'Nội dung xúc phạm' },
+        { value: 'spoiler', label: 'Spoiler' },
+        { value: 'off_topic', label: 'Không liên quan' },
+        { value: 'other', label: 'Khác' }
+    ];
+    const reportReasonLabel = (reason) => REPORT_REASONS.find((item) => item.value === reason)?.label || reason || 'Khác';
 
     // ---------------------------------------------------------------- điều hướng
     function renderNav() {
@@ -174,11 +182,18 @@ kids.forEach(appendKid);
                 return;
             }
             const fragment = document.createDocumentFragment();
-            for (const r of sorted) fragment.append(el('div', { class: 'card review-item' },
-                el('p', { class: 'muted review-meta', text: `${r.authorName}${r.authorScore ? ' · ' + r.authorScore + ' sao' : ''} · ${r.createdAt}` }),
-                el('p', { class: 'review-body', text: r.body }),   // textContent: chuỗi <script> hiển thị nguyên văn
-                me ? el('p', {}, el('button', { class: 'link', text: `Hữu ích (${r.votes.up})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
-                    el('button', { class: 'link', text: 'Báo cáo vi phạm', onclick: async () => { try { await api('POST', `/reviews/${r.id}/reports`, { reason: 'spam' }); toast('Đã gửi báo cáo'); } catch (e) { toast(e.message); } } })) : null));
+            for (const r of sorted) {
+                const reportReason = el('select', { class: 'report-reason', 'aria-label': 'Lý do báo cáo' },
+                    REPORT_REASONS.map((reason) => el('option', { value: reason.value, text: reason.label })));
+                const reportButton = el('button', { class: 'link', text: 'Báo cáo vi phạm', onclick: async () => {
+                    try { await api('POST', `/reviews/${r.id}/reports`, { reason: reportReason.value }); toast('Đã gửi báo cáo'); }
+                    catch (e) { toast(e.message); }
+                } });
+                fragment.append(el('div', { class: 'card review-item' },
+                    el('p', { class: 'muted review-meta', text: `${r.authorName}${r.authorScore ? ' · ' + r.authorScore + ' sao' : ''} · ${r.createdAt}` }),
+                    el('p', { class: 'review-body', text: r.body }),   // textContent: chuỗi <script> hiển thị nguyên văn
+                    me ? el('p', {}, el('button', { class: 'link', text: `Hữu ích (${r.votes.up})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }), reportReason, reportButton) : null));
+            }
             list.append(fragment);
         };
         const updateReviewQuery = () => {
@@ -268,18 +283,50 @@ kids.forEach(appendKid);
             return pager;
         };
         const rp = await api('GET', `/moderation/reports?status=open&size=${pageSize}&page=${reportPage}`);
-        const rbox = el('div', {}); if (!rp.data.length) rbox.append(el('p', { text: 'Không có báo cáo mở.' }));
-        for (const x of rp.data) {
+        const reports = rp.data || [];
+        const reportFilter = el('select', { id: 'report-reason-filter', 'aria-label': 'Lọc báo cáo theo lý do' },
+            el('option', { value: '', text: 'Tất cả lý do' }),
+            REPORT_REASONS.map((reason) => el('option', { value: reason.value, text: reason.label })));
+        const selectedReportReason = q.get('reportReason') || '';
+        reportFilter.value = selectedReportReason;
+        const reasonCounts = REPORT_REASONS.map((reason) => ({
+            ...reason,
+            count: reports.filter((report) => report.reason === reason.value).length
+        }));
+        const reportStats = el('div', { class: 'report-stats', 'aria-label': 'Thống kê lý do báo cáo' },
+            reasonCounts.map((reason) => el('div', { class: 'report-stat' },
+                el('span', { class: 'report-stat__label', text: reason.label }),
+                el('strong', { class: 'report-stat__count', text: reason.count }))));
+        const filteredReports = selectedReportReason
+            ? reports.filter((report) => report.reason === selectedReportReason)
+            : reports;
+        const rbox = el('div', {}); if (!filteredReports.length) rbox.append(el('p', { text: 'Không có báo cáo phù hợp.' }));
+        for (const x of filteredReports) {
             const handle = (decision) => async () => { try { await api('POST', `/moderation/reports/${x.id}/handle`, { decision }); toast('Đã xử lý'); route(); } catch (e) { toast(e.message); } };
-            rbox.append(el('div', { class: 'card' }, el('p', { class: 'muted', text: `Báo cáo #${x.id} · lý do: ${x.reason}` }), el('p', { text: x.reviewBody || x.body || '' }),
+            rbox.append(el('div', { class: 'card report-item' },
+                el('p', { class: 'muted', text: `Báo cáo #${x.id} · lý do: ${reportReasonLabel(x.reason)}` }),
+                el('p', { class: 'report-review-label', text: 'Nội dung bình luận bị báo cáo' }),
+                el('p', { class: 'review-body', text: x.reviewBody || x.body || 'Không có nội dung bình luận.' }),
                 el('button', { class: 'danger', text: 'Xác nhận vi phạm', onclick: handle('resolve') }), ' ', el('button', { class: 'primary', text: 'Bác bỏ', onclick: handle('dismiss') })));
         }
         const reportTotalPages = Math.max(1, Number(rp.pagination && rp.pagination.totalPages || 1));
+        const reportReasonLegend = el('div', { class: 'report-reason-legend', 'aria-label': 'Các lý do báo cáo được hỗ trợ' },
+            REPORT_REASONS.map((reason) => el('span', { class: 'badge', text: `${reason.label} (${reason.value})` })));
+        reportFilter.addEventListener('change', () => {
+            const next = new URLSearchParams(location.hash.split('?')[1] || '');
+            if (reportFilter.value) next.set('reportReason', reportFilter.value);
+            else next.delete('reportReason');
+            next.set('reportPage', '1');
+            location.hash = '#/moderation?' + next;
+        });
         main.replaceChildren(
             el('h2', { text: 'Hàng đợi bình luận' }),
             box,
             makePager(reviewPage, reviewTotalPages, 'reviewPage'),
             el('h2', { text: 'Báo cáo vi phạm' }),
+            el('div', { class: 'card report-filter' }, el('label', { for: 'report-reason-filter', text: 'Lọc theo lý do' }), reportFilter),
+            reportStats,
+            reportReasonLegend,
             rbox,
             makePager(reportPage, reportTotalPages, 'reportPage')
         );
