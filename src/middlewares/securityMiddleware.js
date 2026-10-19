@@ -34,7 +34,7 @@ const securityHeaders = (req, res, next) => {
 //   (2) gửi JSON (Content-Type: application/json), vì biểu mẫu HTML chéo trang
 //       không thể gửi kiểu này mà không qua CORS preflight.
 // Bổ sung cho cookie SameSite=Strict đã đặt ở authController.
-// Yêu cầu dùng Bearer (không có cookie) không bị CSRF nên được miễn.
+// Yêu cầu dùng Bearer (không có cookie) và yêu cầu không có Origin/Referer (công cụ ngoài trình duyệt) được miễn.
 // ---------------------------------------------------------------------------
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -43,15 +43,20 @@ const csrfProtection = (req, res, next) => {
     const usesCookie = Boolean(req.cookies && req.cookies.accessToken);
     if (!usesCookie) return next();
 
+    // Trình duyệt luôn gửi Origin (hoặc Referer) trong yêu cầu POST/PUT/DELETE chéo trang.
+    // Yêu cầu KHÔNG có cả hai là từ công cụ ngoài trình duyệt (curl, Postman, kịch bản kiểm thử): không thể là CSRF
+    // và vẫn bị cookie SameSite=Strict + xác thực bảo vệ, nên được miễn kiểm tra Origin.
     const origin = req.headers.origin || (req.headers.referer ? safeOrigin(req.headers.referer) : null);
+    if (!origin) return next();
+
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     let originHost = null;
-    try { originHost = origin ? new URL(origin).host : null; } catch (e) { originHost = null; }
+    try { originHost = new URL(origin).host; } catch (e) { originHost = null; }
 
     if (!originHost || originHost !== host) {
         return next(HttpError.forbidden('Yêu cầu bị từ chối: không cùng nguồn gốc (CSRF)', 'CSRF_BLOCKED'));
     }
-    // Yêu cầu có thân phải là JSON (tải tệp multipart do route upload tự xử lý bằng cùng quy tắc Origin ở trên)
+    // Cùng nguồn gốc: thân yêu cầu phải là JSON (hoặc multipart cho tải tệp)
     const type = (req.headers['content-type'] || '').toLowerCase();
     if (type && !type.startsWith('application/json') && !type.startsWith('multipart/form-data')) {
         return next(HttpError.forbidden('Kiểu nội dung không được phép', 'CSRF_BLOCKED'));
@@ -71,7 +76,8 @@ function safeOrigin(url) {
 // ---------------------------------------------------------------------------
 const buckets = new Map();
 
-const rateLimit = ({ windowMs, max, code = 'TOO_MANY_REQUESTS', message = 'Quá nhiều yêu cầu, vui lòng thử lại sau' }) => (req, res, next) => {
+const rateLimit = ({ windowMs, max, code = 'TOO_MANY_REQUESTS', message = 'Quá nhiều yêu cầu, vui lòng thử lại sau', skip }) => (req, res, next) => {
+    if (skip && skip(req)) return next();
     const now = Date.now();
     const key = `${code}:${req.ip}`;
     let b = buckets.get(key);
@@ -95,7 +101,8 @@ const rateLimit = ({ windowMs, max, code = 'TOO_MANY_REQUESTS', message = 'Quá 
     return next();
 };
 
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, code: 'TOO_MANY_REQUESTS_AUTH', message: 'Quá nhiều yêu cầu đăng nhập/đăng ký từ địa chỉ này' });
+// Chỉ đếm các yêu cầu GHI (đăng ký, đăng nhập, đăng xuất); GET /auth/me do giao diện gọi khi tải trang nên không đếm.
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, code: 'TOO_MANY_REQUESTS_AUTH', message: 'Quá nhiều yêu cầu đăng nhập/đăng ký từ địa chỉ này', skip: (req) => req.method === 'GET' });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 300, code: 'TOO_MANY_REQUESTS' });
 
 module.exports = { securityHeaders, csrfProtection, rateLimit, authLimiter, apiLimiter };

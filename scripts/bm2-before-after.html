@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"><title>BM2 - trước/sau (chỉ chạy trên máy của bạn)</title>
+<style>body{font-family:system-ui,Arial;max-width:760px;margin:24px auto;line-height:1.5} .box{border:1px solid #888;border-radius:8px;padding:10px 14px;margin:10px 0;background:#fafafa} code{background:#eee;padding:1px 5px} button{padding:8px 14px;margin-right:8px}</style></head>
+<body>
+<h1>BM2 - XSS: trước và sau</h1>
+<p>Trang này mở trực tiếp từ tệp trên máy bạn, chỉ để minh họa. Chuỗi bình luận độc hại giả định đã được lưu trong cơ sở dữ liệu:</p>
+<p><code id="p"></code></p>
+<button id="b1">TRƯỚC: chèn bằng innerHTML (cách sai)</button>
+<button id="b2">SAU: chèn bằng textContent (cách của dự án)</button>
+<div class="box"><strong>Bình luận hiển thị:</strong><div id="out" style="margin-top:6px"></div></div>
+<p>TRƯỚC: hộp thoại alert xuất hiện, tức mã lệnh đã thực thi. SAU: chuỗi hiện nguyên văn như văn bản, không có hộp thoại nào.</p>
+<script>
+var payload = '<img src=x onerror=alert("XSS-truoc")> <script>alert(1)<\/script> Phim hay quá';
+document.getElementById('p').textContent = payload;
+document.getElementById('b1').onclick = function(){ document.getElementById('out').innerHTML = payload; };
+document.getElementById('b2').onclick = function(){ document.getElementById('out').textContent = payload; };
+</script></body></html>
