@@ -11,7 +11,22 @@
             if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
             else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (v !== undefined && v !== null) n.setAttribute(k, v);
         }
-        for (const kid of kids.flat()) if (kid !== null && kid !== undefined) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+        const appendKid = (kid) => {
+    if (kid === null || kid === undefined) return;
+
+    if (Array.isArray(kid)) {
+        kid.forEach(appendKid);
+        return;
+    }
+
+    n.append(
+        kid.nodeType
+            ? kid
+            : document.createTextNode(String(kid))
+    );
+};
+
+kids.forEach(appendKid);
         return n;
     };
     const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 3200); };
@@ -58,12 +73,12 @@
     }
 
     function pageLogin() {
-        formPage('Đăng nhập', [{ id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu', type: 'password', ac: 'current-password' }], 'Đăng nhập', async (v) => {
+        formPage('Đăng nhập', [{ id: 'email', label: 'Email', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu', type: 'password', ac: 'current-password' }], 'Đăng nhập', async (v) => {
             await api('POST', '/auth/login', v); await loadMe(); toast('Đăng nhập thành công'); location.hash = '#/'; route();
         });
     }
     function pageRegister() {
-        formPage('Đăng ký', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'displayName', label: 'Tên hiển thị' }, { id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu (tối thiểu 8 ký tự)', type: 'password', ac: 'new-password', min: 8 }], 'Tạo tài khoản', async (v) => {
+        formPage('Đăng ký', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'displayName', label: 'Tên hiển thị' }, { id: 'email', label: 'Email', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu (tối thiểu 8 ký tự)', type: 'password', ac: 'new-password', min: 8 }], 'Tạo tài khoản', async (v) => {
             if (!v.displayName) delete v.displayName;
             await api('POST', '/auth/register', v); toast('Đăng ký thành công, hãy đăng nhập'); location.hash = '#/login'; route();
         });
