@@ -128,12 +128,26 @@ kids.forEach(appendKid);
                 el('div', { class: 'row' }, el('div', {}, el('label', { for: 'wl', text: 'Danh sách theo dõi' }), wl), el('button', { class: 'primary', text: 'Thêm vào danh sách', onclick: act(() => api('PUT', `/me/watchlist/${id}`, { listType: wl.value }), 'Đã cập nhật danh sách') }))));
         } else wrap.append(el('p', {}, el('a', { href: '#/login', text: 'Đăng nhập' }), ' để chấm điểm và bình luận.'));
         const rv = (await api('GET', `/titles/${id}/reviews?size=20`)).data;
-        const list = el('div', { class: 'card' }, el('h3', { text: `Bình luận (${rv.length})` }));
-        for (const r of rv) list.append(el('div', { class: 'card' },
-            el('p', { class: 'muted', text: `${r.authorName}${r.authorScore ? ' · ' + r.authorScore + ' sao' : ''} · ${r.createdAt}` }),
-            el('p', { text: r.body }),   // textContent: chuỗi <script> hiển thị nguyên văn
-            me ? el('p', {}, el('button', { class: 'link', text: `Hữu ích (${r.votes.up})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
-                el('button', { class: 'link', text: 'Báo cáo vi phạm', onclick: async () => { try { await api('POST', `/reviews/${r.id}/reports`, { reason: 'spam' }); toast('Đã gửi báo cáo'); } catch (e) { toast(e.message); } } })) : null));
+        const sort = el('select', { id: 'review-sort', 'aria-label': 'Sắp xếp bình luận' },
+            el('option', { value: 'newest', text: 'Mới nhất' }),
+            el('option', { value: 'stars', text: 'Số sao cao đến thấp' }));
+        const list = el('div', { class: 'card review-list' },
+            el('div', { class: 'review-list__header' }, el('h3', { text: `Bình luận (${rv.length})` }),
+                el('div', {}, el('label', { for: 'review-sort', text: 'Sắp xếp' }), sort)));
+        const renderReviews = () => {
+            list.querySelectorAll('.review-item').forEach((item) => item.remove());
+            const sorted = [...rv].sort((a, b) => {
+                if (sort.value === 'stars') return Number(b.authorScore || 0) - Number(a.authorScore || 0);
+                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+            });
+            for (const r of sorted) list.append(el('div', { class: 'card review-item' },
+                el('p', { class: 'muted review-meta', text: `${r.authorName}${r.authorScore ? ' · ' + r.authorScore + ' sao' : ''} · ${r.createdAt}` }),
+                el('p', { class: 'review-body', text: r.body }),   // textContent: chuỗi <script> hiển thị nguyên văn
+                me ? el('p', {}, el('button', { class: 'link', text: `Hữu ích (${r.votes.up})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
+                    el('button', { class: 'link', text: 'Báo cáo vi phạm', onclick: async () => { try { await api('POST', `/reviews/${r.id}/reports`, { reason: 'spam' }); toast('Đã gửi báo cáo'); } catch (e) { toast(e.message); } } })) : null));
+        };
+        sort.addEventListener('change', renderReviews);
+        renderReviews();
         wrap.append(list);
         main.replaceChildren(wrap);
     }
