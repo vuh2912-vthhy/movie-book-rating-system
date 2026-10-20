@@ -83,13 +83,13 @@
     }
 
     function pageLogin() {
-        formPage('Đăng nhập', [{ id: 'email', label: 'Email', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu', type: 'password', ac: 'current-password' }], 'Đăng nhập', async (v) => {
+        formPage('Đăng nhập', [{ id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu', type: 'password', ac: 'current-password' }], 'Đăng nhập', async (v) => {
             await api('POST', '/auth/login', v); await loadMe(); toast('Đăng nhập thành công'); location.hash = '#/'; route();
         });
         main.append(el('p', {}, el('a', { href: '#/forgot', text: 'Quên mật khẩu?' })));
     }
     function pageRegister() {
-        formPage('Đăng ký', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'displayName', label: 'Tên hiển thị' }, { id: 'email', label: 'Email', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu (tối thiểu 8 ký tự)', type: 'password', ac: 'new-password', min: 8 }], 'Tạo tài khoản', async (v) => {
+        formPage('Đăng ký', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'displayName', label: 'Tên hiển thị' }, { id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu (tối thiểu 8 ký tự)', type: 'password', ac: 'new-password', min: 8 }], 'Tạo tài khoản', async (v) => {
             if (!v.displayName) delete v.displayName;
             await api('POST', '/auth/register', v); toast('Đăng ký thành công, hãy đăng nhập'); location.hash = '#/login'; route();
         });
@@ -171,10 +171,7 @@
             el('p', {}, el('button', { class: 'primary', text: 'Gửi bình luận', onclick: act(() => api('POST', `/titles/${id}/reviews`, { body: body.value }), 'Đã gửi, đang chờ duyệt') })),
             el('div', { class: 'row' }, el('div', {}, el('label', { for: 'wl', text: 'Danh sách theo dõi' }), wl), el('button', { class: 'primary', text: 'Thêm vào danh sách', onclick: act(() => api('PUT', `/me/watchlist/${id}`, { listType: wl.value }), 'Đã cập nhật danh sách') }))));
         } else wrap.append(el('p', {}, el('a', { href: '#/login', text: 'Đăng nhập' }), ' để chấm điểm và bình luận.'));
-        const reviewQuery = new URLSearchParams({ page: String(requestedPage), size: '10', sort: selectedSort });
-        if (selectedRating) reviewQuery.set('rating', selectedRating);
-        const reviewResponse = await api('GET', `/titles/${id}/reviews?${reviewQuery}`);
-        const pagination = reviewResponse.pagination || {};
+        const reviewResponse = await api('GET', `/titles/${id}/reviews?size=20`);
         const fetchedReviews = Array.isArray(reviewResponse.data) ? [...reviewResponse.data] : [];
         const filteredReviews = selectedRating
             ? fetchedReviews.filter((r) => Number(r.authorScore) === Number(selectedRating))
@@ -183,11 +180,10 @@
             if (selectedSort === 'rating_desc') return Number(b.authorScore || 0) - Number(a.authorScore || 0);
             return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
         });
-        const serverPaged = Object.keys(pagination).length > 0 || fetchedReviews.length <= 10;
-        const reviewTotal = Number(pagination.total ?? (selectedRating ? filteredReviews.length : fetchedReviews.length));
-        const totalPages = Math.max(1, Number(pagination.totalPages || Math.ceil(reviewTotal / 10) || 1));
+        const reviewTotal = filteredReviews.length;
+        const totalPages = Math.max(1, Math.ceil(reviewTotal / 10));
         const currentPage = Math.min(requestedPage, totalPages);
-        const rows = serverPaged ? filteredReviews : filteredReviews.slice((requestedPage - 1) * 10, requestedPage * 10);
+        const rows = filteredReviews.slice((currentPage - 1) * 10, currentPage * 10);
         const controls = el('div', { class: 'card review-tools' });
         const sortSelect = el('select', { id: 'reviewSort', 'aria-label': 'Sắp xếp bình luận' },
             el('option', { value: 'latest', text: 'Mới nhất' }),
@@ -269,7 +265,7 @@
             el('option', { value: 'movie', text: 'Phim' }), el('option', { value: 'book', text: 'Sách' }));
         kindSelect.value = selectedKind;
         kindSelect.addEventListener('change', () => { location.hash = `#/ranking?kind=${kindSelect.value}`; });
-        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng (điểm có xét độ tin cậy – Bayes)' }),
+        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng điểm Bayes' }),
             el('p', { class: 'muted', text: 'weighted = (v·R + m·C) / (v + m): tác phẩm ít lượt chấm bị kéo về điểm trung bình toàn hệ thống.' }),
             el('div', { class: 'card ranking-filter' }, el('label', { for: 'rankingKind', text: 'Xếp hạng theo loại' }), kindSelect),
             responsiveTable(el('table', {}, el('caption', { class: 'muted', text: `Top 20 · ${selectedKind === 'movie' ? 'Phim' : 'Sách'}` }), el('thead', {}, el('tr', {}, ['#', 'Tác phẩm', 'Lượt chấm', 'Trung bình', 'Điểm xếp hạng'].map((h) => el('th', { scope: 'col', text: h })))), tb)));
@@ -295,35 +291,50 @@
         }
         const reportQuery = new URLSearchParams({ status: 'open', page: String(requestedPage), size: '10' });
         if (selectedReason) reportQuery.set('reason', selectedReason);
-        const countRequests = REPORT_REASONS.map(async (reason) => {
-            const pageSize = 100;
+        const countRequest = (async () => {
+            const counts = Object.fromEntries(REPORT_REASONS.map((reason) => [reason, 0]));
             const seenIds = new Set();
-            let count = 0;
+            const pageSize = 10;
+            let expectedPages = null;
             for (let page = 1; page <= 100; page += 1) {
-                const params = new URLSearchParams({ status: 'open', page: String(page), size: String(pageSize), reason });
+                const params = new URLSearchParams({ status: 'open', page: String(page), size: String(pageSize) });
                 try {
                     const result = await api('GET', `/moderation/reports?${params}`);
-                    const knownTotal = result.pagination && result.pagination.total;
-                    if (knownTotal !== undefined && knownTotal !== null && Number.isFinite(Number(knownTotal))) {
-                        return { reason, total: Number(knownTotal) };
-                    }
                     const records = Array.isArray(result.data) ? result.data : [];
-                    let added = 0;
-                    for (const record of records) {
-                        if (record.reason !== reason || record.id === undefined || record.id === null) continue;
-                        const id = String(record.id);
-                        if (!seenIds.has(id)) { seenIds.add(id); count += 1; added += 1; }
+                    const pagination = result.pagination || {};
+                    if (page === 1) {
+                        const totalPages = pagination.totalPages === undefined || pagination.totalPages === null ? NaN : Number(pagination.totalPages);
+                        const total = pagination.total === undefined || pagination.total === null ? NaN : Number(pagination.total);
+                        const reportedPageSize = Number(pagination.size || pagination.pageSize) || pageSize;
+                        if (Number.isFinite(totalPages) && totalPages > 0) expectedPages = Math.ceil(totalPages);
+                        else if (Number.isFinite(total) && total >= 0) expectedPages = Math.max(1, Math.ceil(total / reportedPageSize));
                     }
-                    if (records.length < pageSize) return { reason, total: count };
-                    if (!added) return { reason, total: null };
-                } catch (e) { return { reason, total: null }; }
+                    let added = 0;
+                    records.forEach((record) => {
+                        const reason = record.reason;
+                        if (!Object.prototype.hasOwnProperty.call(counts, reason)) return;
+                        if (record.id !== undefined && record.id !== null) {
+                            const id = String(record.id);
+                            if (seenIds.has(id)) return;
+                            seenIds.add(id);
+                        }
+                        counts[reason] += 1;
+                        added += 1;
+                    });
+                    if (expectedPages !== null && page >= expectedPages) return { counts, complete: true };
+                    if (expectedPages === null && records.length < pageSize) return { counts, complete: true };
+                    if (records.length === 0) return { counts, complete: true };
+                    if (added === 0) return { counts, complete: false };
+                } catch (e) { return { counts, complete: false }; }
             }
-            return { reason, total: null };
-        });
-        const [rp, ...reasonCounts] = await Promise.all([
-            api('GET', `/moderation/reports?${reportQuery}`), ...countRequests
+            return { counts, complete: false };
+        })();
+        const [rp, reasonCountResult] = await Promise.all([
+            api('GET', `/moderation/reports?${reportQuery}`), countRequest
         ]);
-        const countByReason = Object.fromEntries(reasonCounts.map((item) => [item.reason, item.total]));
+        const countByReason = Object.fromEntries(REPORT_REASONS.map((reason) => [
+            reason, reasonCountResult.complete ? reasonCountResult.counts[reason] : null
+        ]));
         const allReports = Array.isArray(rp.data) ? rp.data : [];
         const filteredReports = selectedReason ? allReports.filter((x) => x.reason === selectedReason) : allReports;
         const reportPagination = rp.pagination || {};
@@ -422,7 +433,7 @@
     function pageForgot() {
         const out = el('div', {});
         main.replaceChildren(el('h2', { text: 'Quên mật khẩu' }),
-            card('Nhận mã đặt lại', [{ id: 'email', label: 'Email', type: 'email', ac: 'username' }], 'Gửi mã', async (v) => {
+            card('Nhận mã đặt lại', [{ id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }], 'Gửi mã', async (v) => {
                 const r = await api('POST', '/auth/forgot-password', v);
                 out.replaceChildren(el('p', { class: 'ok', text: r.message }));
                 if (r.data && r.data.simulatedEmail) {
@@ -518,7 +529,7 @@
             if (!parts.length) await pageList(qs || '');
             else if (parts[0] === 'login') pageLogin();
             else if (parts[0] === 'register') pageRegister();
-            else if (parts[0] === 'title') await pageTitle(Number(parts[1]), qs || '');
+            else if (parts[0] === 'title' && parts[1]) await pageTitle(parts[1], qs || '');
             else if (parts[0] === 'ranking') await pageRanking(qs || '');
             else if (parts[0] === 'watchlist') await pageWatchlist();
             else if (parts[0] === 'moderation') await pageModeration(qs || '');
