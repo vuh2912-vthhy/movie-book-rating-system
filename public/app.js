@@ -11,7 +11,7 @@
             if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
             else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (v !== undefined && v !== null) n.setAttribute(k, v);
         }
-        for (const kid of kids.flat()) if (kid !== null && kid !== undefined) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+        for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
         return n;
     };
     const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 3200); };
@@ -27,6 +27,31 @@
     const can = (p) => me && me.permissions && me.permissions.includes(p);
     const isStaff = () => me && me.roles && (me.roles.includes('ADMIN') || me.roles.includes('MODERATOR'));
     const stars = (n) => (n === null || n === undefined ? 'Chưa có' : `${Number(n).toFixed(2)} / 5`);
+    const REPORT_REASONS = [
+        'spam',
+        'offensive',
+        'spoiler',
+        'off_topic',
+        'other'
+    ];
+    const REPORT_REASON_LABELS = {
+        spam: 'Spam',
+        offensive: 'Nội dung xúc phạm',
+        spoiler: 'Spoiler',
+        off_topic: 'Không liên quan',
+        other: 'Khác'
+    };
+    const reportReasonLabel = (reason) => REPORT_REASON_LABELS[reason] || 'Khác';
+    const titleCover = (title, kind, posterPath, className) => {
+        if (posterPath) return el('img', { class: className, src: posterPath, alt: `Ảnh bìa: ${title}`, loading: 'lazy' });
+        const isMovie = kind === 'movie';
+        const monogram = String(title || '').trim().slice(0, 1).toLocaleUpperCase('vi-VN') || 'Đ';
+        return el('div', { class: `${className} cover-fallback`, role: 'img', 'data-kind': kind, 'aria-label': `Ảnh minh họa ${isMovie ? 'phim' : 'sách'}: ${title}` },
+            el('span', { class: 'cover-kind', text: isMovie ? 'PHIM' : 'SÁCH' }),
+            el('strong', { class: 'cover-monogram', text: monogram }),
+            el('span', { class: 'cover-detail', text: isMovie ? 'KHUNG HÌNH' : 'TRANG SÁCH' }));
+    };
+    const responsiveTable = (table) => el('div', { class: 'table-wrap' }, table);
 
     // ---------------------------------------------------------------- điều hướng
     function renderNav() {
@@ -72,37 +97,56 @@
 
     async function pageList(params) {
         const q = new URLSearchParams(params); const page = Number(q.get('page') || 1);
-        const kw = el('input', { id: 'kw', type: 'search', value: q.get('keyword') || '', placeholder: 'Tên phim/sách (có dấu hoặc không dấu)' });
+        const kw = el('input', { id: 'kw', type: 'search', value: q.get('keyword') || '', placeholder: 'Tìm theo tên phim hoặc sách' });
         const kind = el('select', { id: 'kind' }, el('option', { value: '', text: 'Tất cả' }), el('option', { value: 'movie', text: 'Phim' }), el('option', { value: 'book', text: 'Sách' }));
         kind.value = q.get('kind') || '';
         const go = () => { const p = new URLSearchParams(); if (kw.value.trim()) p.set('keyword', kw.value.trim()); if (kind.value) p.set('kind', kind.value); location.hash = '#/?' + p; };
         const box = el('div', { class: 'grid' }); const pager = el('div', { class: 'pager' });
-        main.replaceChildren(el('h2', { text: 'Danh mục phim và sách' }),
-            el('div', { class: 'card row' }, el('div', {}, el('label', { for: 'kw', text: 'Tìm kiếm' }), kw), el('div', {}, el('label', { for: 'kind', text: 'Loại' }), kind), el('button', { class: 'primary', text: 'Tìm', onclick: go })),
-            box, pager);
+        const intro = el('section', { class: 'catalog-hero' },
+            el('p', { class: 'catalog-kicker', text: 'KHUNG HÌNH · TRANG SÁCH · GÓC NHÌN CỘNG ĐỒNG' }),
+            el('h2', { text: 'Danh mục phim và sách' }),
+            el('p', { class: 'catalog-description', text: 'Gặp những câu chuyện đáng nhớ — từ màn ảnh rộng đến trang sách, qua cảm nhận của cộng đồng.' }));
+        const filters = el('div', { class: 'card row catalog-filter' },
+            el('div', {}, el('label', { for: 'kw', text: 'Tìm kiếm' }), kw),
+            el('div', {}, el('label', { for: 'kind', text: 'Loại tác phẩm' }), kind),
+            el('button', { class: 'primary', text: 'Tìm tác phẩm', onclick: go }));
+        main.replaceChildren(intro, filters, box, pager);
         kw.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
         q.set('size', '12'); q.set('page', String(page)); q.set('sort', q.get('sort') || 'rating');
         const r = await api('GET', '/titles?' + q);
         if (!r.data.length) box.append(el('p', { text: 'Không có kết quả.' }));
-        for (const t of r.data) box.append(el('article', { class: 'card' },
-            el('h3', {}, el('a', { href: `#/title/${t.id}`, text: t.title })),
-            el('p', { class: 'muted', text: `${t.kind === 'movie' ? 'Phim' : 'Sách'} · ${t.releaseYear}` }),
-            el('p', { text: `Điểm: ${stars(t.stats.ratingAvg)} (${t.stats.ratingCount} lượt)` }),
-            t.genres.map((g) => el('span', { class: 'badge', text: g.name }))));
+        for (const t of r.data) {
+            const kindLabel = t.kind === 'movie' ? 'Phim' : 'Sách';
+            box.append(el('article', { class: 'card title-card', 'data-kind': t.kind },
+                titleCover(t.title, t.kind, t.posterPath, 'catalog-cover'),
+                el('div', { class: 'title-card-content' },
+                    el('p', { class: 'title-card-meta', text: `${kindLabel} · ${t.releaseYear}` }),
+                    el('h3', {}, el('a', { href: `#/title/${t.id}`, text: t.title })),
+                    el('p', { class: 'rating-line', text: `★ ${stars(t.stats.ratingAvg)} · ${t.stats.ratingCount} lượt chấm` }),
+                    el('div', { class: 'genre-list' }, t.genres.map((g) => el('span', { class: 'badge', text: g.name }))))));
+        }
         const base = new URLSearchParams(q); base.delete('size');
         const mk = (p, label) => { const b = new URLSearchParams(base); b.set('page', p); return el('a', { href: '#/?' + b, text: label }); };
         pager.append(page > 1 ? mk(page - 1, '← Trước') : '', el('span', { text: `Trang ${r.pagination.page}/${r.pagination.totalPages}` }), page < r.pagination.totalPages ? mk(page + 1, 'Sau →') : '');
     }
 
-    async function pageTitle(id) {
+    async function pageTitle(id, queryString) {
+        const query = new URLSearchParams(queryString || '');
+        const requestedPage = Math.max(1, Number.parseInt(query.get('page') || '1', 10) || 1);
+        const selectedSort = ['latest', 'rating_desc'].includes(query.get('sort')) ? query.get('sort') : 'latest';
+        const selectedRating = ['1', '2', '3', '4', '5'].includes(query.get('rating')) ? query.get('rating') : '';
         const t = (await api('GET', `/titles/${id}`)).data;
-        const wrap = el('div', {});
-        wrap.append(el('div', { class: 'card' }, el('h2', { text: t.title }),
-            el('p', { class: 'muted', text: `${t.kind === 'movie' ? 'Phim' : 'Sách'} · ${t.releaseYear}` }),
-            el('p', { text: t.synopsis || '' }),
-            el('p', { text: `Điểm trung bình ${stars(t.stats.ratingAvg)} · ${t.stats.ratingCount} lượt chấm · điểm xếp hạng tin cậy ${t.stats.weightedScore}` })));
-        if (t.posterPath) wrap.prepend(el('img', { src: t.posterPath, alt: `Ảnh bìa: ${t.title}`, width: '160', style: 'float:right;margin:0 0 8px 12px;border-radius:6px' }));
-        if (t.credits && t.credits.length) wrap.append(el('p', { class: 'muted', text: 'Nhân sự: ' + t.credits.map((c) => `${c.name} (${c.role})`).join(', ') }));
+        const wrap = el('div', { class: 'title-page' });
+        const isMovie = t.kind === 'movie';
+        const summary = el('div', { class: 'card title-summary' },
+            el('p', { class: 'title-kicker', text: `${isMovie ? 'PHIM' : 'SÁCH'} · ${t.releaseYear}` }),
+            el('h2', { text: t.title }),
+            el('p', { class: 'title-synopsis', text: t.synopsis || '' }),
+            el('p', { class: 'title-scoreline', text: `★ ${stars(t.stats.ratingAvg)} · ${t.stats.ratingCount} lượt chấm` }),
+            el('p', { class: 'title-weighted-score', text: `Điểm xếp hạng tin cậy ${t.stats.weightedScore}` }));
+        if (t.credits && t.credits.length) summary.append(el('p', { class: 'muted title-credits', text: 'Nhân sự: ' + t.credits.map((c) => `${c.name} (${c.role})`).join(', ') }));
+        const hero = el('section', { class: 'title-hero' }, titleCover(t.title, t.kind, t.posterPath, 'detail-cover'), summary);
+        wrap.append(hero);
         if (isStaff()) {
             const file = el('input', { id: 'poster', type: 'file', accept: 'image/png,image/jpeg,image/webp' });
             wrap.append(el('div', { class: 'card' }, el('h3', { text: 'Ảnh bìa (MODERATOR, ADMIN)' }), el('label', { for: 'poster', text: 'Chọn ảnh JPG, PNG hoặc WebP, tối đa 2 MB' }), file,
@@ -121,28 +165,114 @@
             const body = el('textarea', { id: 'body', rows: '3', maxlength: '2000', placeholder: 'Bình luận (tối thiểu 10 ký tự, sẽ được kiểm duyệt)' });
             try { const mine = (await api('GET', `/titles/${id}/rating`)).data; if (mine && mine.score) sel.value = mine.score; } catch (e) { /* chưa chấm */ }
             const act = (fn, okMsg) => async () => { try { await fn(); toast(okMsg); route(); } catch (e) { toast(e.message); } };
-            wrap.append(el('div', { class: 'card' }, el('h3', { text: 'Đánh giá của bạn' }),
+            wrap.append(el('div', { class: 'card rating-card' }, el('h3', { text: 'Đánh giá của bạn' }),
                 el('div', { class: 'row' }, el('div', {}, el('label', { for: 'score', text: 'Điểm' }), sel), el('button', { class: 'primary', text: 'Lưu điểm', onclick: act(() => api('PUT', `/titles/${id}/rating`, { score: Number(sel.value) }), 'Đã lưu điểm') })),
-                el('label', { for: 'body', text: 'Bình luận' }), body,
-                el('p', {}, el('button', { class: 'primary', text: 'Gửi bình luận', onclick: act(() => api('POST', `/titles/${id}/reviews`, { body: body.value }), 'Đã gửi, đang chờ duyệt') })),
-                el('div', { class: 'row' }, el('div', {}, el('label', { for: 'wl', text: 'Danh sách theo dõi' }), wl), el('button', { class: 'primary', text: 'Thêm vào danh sách', onclick: act(() => api('PUT', `/me/watchlist/${id}`, { listType: wl.value }), 'Đã cập nhật danh sách') }))));
+            el('label', { for: 'body', text: 'Bình luận' }), body,
+            el('p', {}, el('button', { class: 'primary', text: 'Gửi bình luận', onclick: act(() => api('POST', `/titles/${id}/reviews`, { body: body.value }), 'Đã gửi, đang chờ duyệt') })),
+            el('div', { class: 'row' }, el('div', {}, el('label', { for: 'wl', text: 'Danh sách theo dõi' }), wl), el('button', { class: 'primary', text: 'Thêm vào danh sách', onclick: act(() => api('PUT', `/me/watchlist/${id}`, { listType: wl.value }), 'Đã cập nhật danh sách') }))));
         } else wrap.append(el('p', {}, el('a', { href: '#/login', text: 'Đăng nhập' }), ' để chấm điểm và bình luận.'));
-        const rv = (await api('GET', `/titles/${id}/reviews?size=20`)).data;
-        const list = el('div', { class: 'card' }, el('h3', { text: `Bình luận (${rv.length})` }));
-        for (const r of rv) list.append(el('div', { class: 'card' },
-            el('p', { class: 'muted', text: `${r.authorName}${r.authorScore ? ' · ' + r.authorScore + ' sao' : ''} · ${r.createdAt}` }),
-            el('p', { text: r.body }),   // textContent: chuỗi <script> hiển thị nguyên văn
-            me ? el('p', {}, el('button', { class: 'link', text: `Hữu ích (${r.votes.up})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
-                el('button', { class: 'link', text: 'Báo cáo vi phạm', onclick: async () => { try { await api('POST', `/reviews/${r.id}/reports`, { reason: 'spam' }); toast('Đã gửi báo cáo'); } catch (e) { toast(e.message); } } })) : null));
-        wrap.append(list);
+        const reviewQuery = new URLSearchParams({ page: String(requestedPage), size: '10', sort: selectedSort });
+        if (selectedRating) reviewQuery.set('rating', selectedRating);
+        const reviewResponse = await api('GET', `/titles/${id}/reviews?${reviewQuery}`);
+        const pagination = reviewResponse.pagination || {};
+        const fetchedReviews = Array.isArray(reviewResponse.data) ? [...reviewResponse.data] : [];
+        const filteredReviews = selectedRating
+            ? fetchedReviews.filter((r) => Number(r.authorScore) === Number(selectedRating))
+            : fetchedReviews;
+        filteredReviews.sort((a, b) => {
+            if (selectedSort === 'rating_desc') return Number(b.authorScore || 0) - Number(a.authorScore || 0);
+            return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        });
+        const serverPaged = Object.keys(pagination).length > 0 || fetchedReviews.length <= 10;
+        const reviewTotal = Number(pagination.total ?? (selectedRating ? filteredReviews.length : fetchedReviews.length));
+        const totalPages = Math.max(1, Number(pagination.totalPages || Math.ceil(reviewTotal / 10) || 1));
+        const currentPage = Math.min(requestedPage, totalPages);
+        const rows = serverPaged ? filteredReviews : filteredReviews.slice((requestedPage - 1) * 10, requestedPage * 10);
+        const controls = el('div', { class: 'card review-tools' });
+        const sortSelect = el('select', { id: 'reviewSort', 'aria-label': 'Sắp xếp bình luận' },
+            el('option', { value: 'latest', text: 'Mới nhất' }),
+            el('option', { value: 'rating_desc', text: 'Số sao cao đến thấp' }));
+        sortSelect.value = selectedSort;
+        const ratingSelect = el('select', { id: 'reviewRating', 'aria-label': 'Lọc bình luận theo số sao' },
+            el('option', { value: '', text: 'Tất cả số sao' }),
+            [5, 4, 3, 2, 1].map((n) => el('option', { value: n, text: `${n} sao` })));
+        ratingSelect.value = selectedRating;
+        const updateReviewQuery = (key, value) => {
+            const next = new URLSearchParams(query);
+            next.set('page', '1');
+            if (value) next.set(key, value); else next.delete(key);
+            location.hash = `#/title/${id}?${next}`;
+        };
+        sortSelect.addEventListener('change', () => updateReviewQuery('sort', sortSelect.value));
+        ratingSelect.addEventListener('change', () => updateReviewQuery('rating', ratingSelect.value));
+        controls.append(
+            el('div', {}, el('label', { for: 'reviewSort', text: 'Sắp xếp' }), sortSelect),
+            el('div', {}, el('label', { for: 'reviewRating', text: 'Lọc theo điểm' }), ratingSelect));
+        const list = el('div', { class: 'card review-list', 'aria-label': 'Danh sách bình luận' },
+            el('h3', { text: `Bình luận (${reviewTotal})` }));
+        if (!rows.length) list.append(el('p', { class: 'muted', text: 'Chưa có bình luận phù hợp với bộ lọc.' }));
+        for (const r of rows) {
+            const voteCount = r.votes && r.votes.up !== undefined ? r.votes.up : 0;
+            const reviewCard = el('div', { class: 'card review-card' },
+                el('p', { class: 'muted', text: `${r.authorName || 'Người dùng'}${r.authorScore !== null && r.authorScore !== undefined ? ' · ' + r.authorScore + ' sao' : ''}${r.createdAt ? ' · ' + r.createdAt : ''}` }),
+                el('p', { class: 'review-body', text: r.body || '' })); // textContent: nội dung HTML hiển thị nguyên văn
+            if (me) {
+                const reasonId = `report-reason-${r.id}`;
+                const reasonSelect = el('select', { id: reasonId, required: 'required' },
+                    el('option', { value: '', text: 'Chọn lý do báo cáo', disabled: 'disabled', selected: 'selected' }),
+                    REPORT_REASONS.map((reason) => el('option', { value: reason, text: REPORT_REASON_LABELS[reason] })));
+                const reportMessage = el('p', { class: 'err', role: 'alert' });
+                const reportForm = el('form', { class: 'report-form', hidden: 'hidden' },
+                    el('label', { for: reasonId, text: 'Lý do báo cáo' }), reasonSelect,
+                    reportMessage,
+                    el('button', { class: 'primary', type: 'submit', text: 'Gửi báo cáo' }));
+                reportForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    reportMessage.textContent = '';
+                    if (!REPORT_REASONS.includes(reasonSelect.value)) {
+                        reportMessage.textContent = 'Vui lòng chọn một lý do báo cáo.';
+                        return;
+                    }
+                    try {
+                        await api('POST', `/reviews/${r.id}/reports`, { reason: reasonSelect.value });
+                        toast('Đã gửi báo cáo');
+                        reportForm.hidden = true;
+                        reasonSelect.value = '';
+                    } catch (e) { reportMessage.textContent = e.message; }
+                });
+                reviewCard.append(el('div', { class: 'review-actions' },
+                    el('button', { class: 'link', type: 'button', text: `Hữu ích (${voteCount})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
+                    el('button', { class: 'link', type: 'button', text: 'Báo cáo vi phạm', onclick: () => { reportForm.hidden = !reportForm.hidden; } }),
+                    reportForm));
+            }
+            list.append(reviewCard);
+        }
+        const reviewPageLink = (pageNumber, label) => {
+            const next = new URLSearchParams(query);
+            next.set('page', String(pageNumber));
+            return el('a', { href: `#/title/${id}?${next}`, text: label });
+        };
+        const reviewPager = el('div', { class: 'pager', 'aria-label': 'Phân trang bình luận' },
+            currentPage > 1 ? reviewPageLink(currentPage - 1, '← Trước') : null,
+            el('span', { text: `Trang ${currentPage}/${totalPages}` }),
+            currentPage < totalPages ? reviewPageLink(currentPage + 1, 'Sau →') : null);
+        wrap.append(controls, list, reviewPager);
         main.replaceChildren(wrap);
     }
 
-    async function pageRanking() {
-        const r = await api('GET', '/stats/ranking?limit=20');
+    async function pageRanking(queryString) {
+        const query = new URLSearchParams(queryString || '');
+        const selectedKind = query.get('kind') === 'book' ? 'book' : 'movie';
+        const r = await api('GET', `/stats/ranking?limit=20&kind=${selectedKind}`);
         const tb = el('tbody', {}); r.data.forEach((x, i) => tb.append(el('tr', {}, el('td', { text: i + 1 }), el('td', {}, el('a', { href: `#/title/${x.id}`, text: x.title })), el('td', { text: x.ratingCount }), el('td', { text: x.ratingAvg ?? '-' }), el('td', { text: x.weightedScore }))));
-        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng (điểm có xét độ tin cậy – Bayes)' }), el('p', { class: 'muted', text: 'weighted = (v·R + m·C) / (v + m): tác phẩm ít lượt chấm bị kéo về điểm trung bình toàn hệ thống.' }),
-            el('table', {}, el('caption', { class: 'muted', text: 'Top 20' }), el('thead', {}, el('tr', {}, ['#', 'Tác phẩm', 'Lượt chấm', 'Trung bình', 'Điểm xếp hạng'].map((h) => el('th', { scope: 'col', text: h })))), tb));
+        const kindSelect = el('select', { id: 'rankingKind', 'aria-label': 'Loại tác phẩm xếp hạng' },
+            el('option', { value: 'movie', text: 'Phim' }), el('option', { value: 'book', text: 'Sách' }));
+        kindSelect.value = selectedKind;
+        kindSelect.addEventListener('change', () => { location.hash = `#/ranking?kind=${kindSelect.value}`; });
+        main.replaceChildren(el('h2', { text: 'Bảng xếp hạng (điểm có xét độ tin cậy – Bayes)' }),
+            el('p', { class: 'muted', text: 'weighted = (v·R + m·C) / (v + m): tác phẩm ít lượt chấm bị kéo về điểm trung bình toàn hệ thống.' }),
+            el('div', { class: 'card ranking-filter' }, el('label', { for: 'rankingKind', text: 'Xếp hạng theo loại' }), kindSelect),
+            responsiveTable(el('table', {}, el('caption', { class: 'muted', text: `Top 20 · ${selectedKind === 'movie' ? 'Phim' : 'Sách'}` }), el('thead', {}, el('tr', {}, ['#', 'Tác phẩm', 'Lượt chấm', 'Trung bình', 'Điểm xếp hạng'].map((h) => el('th', { scope: 'col', text: h })))), tb)));
     }
 
     async function pageWatchlist() {
@@ -152,7 +282,10 @@
         main.replaceChildren(el('h2', { text: 'Danh sách theo dõi của tôi' }), box);
     }
 
-    async function pageModeration() {
+    async function pageModeration(queryString) {
+        const query = new URLSearchParams(queryString || '');
+        const requestedPage = Math.max(1, Number.parseInt(query.get('page') || '1', 10) || 1);
+        const selectedReason = REPORT_REASONS.includes(query.get('reason')) ? query.get('reason') : '';
         const rv = await api('GET', '/moderation/reviews?status=pending&size=20');
         const box = el('div', {}); if (!rv.data.length) box.append(el('p', { text: 'Không có bình luận chờ duyệt.' }));
         for (const r of rv.data) {
@@ -160,14 +293,90 @@
             box.append(el('div', { class: 'card' }, el('p', { class: 'muted', text: `#${r.id} · ${r.authorName || r.displayName || ''} · ${r.titleName || r.title || ''}` }), el('p', { text: r.body }),
                 el('button', { class: 'primary', text: 'Duyệt', onclick: decide('approve') }), ' ', el('button', { class: 'danger', text: 'Từ chối', onclick: decide('reject') })));
         }
-        const rp = await api('GET', '/moderation/reports?status=open&size=20');
-        const rbox = el('div', {}); if (!rp.data.length) rbox.append(el('p', { text: 'Không có báo cáo mở.' }));
-        for (const x of rp.data) {
+        const reportQuery = new URLSearchParams({ status: 'open', page: String(requestedPage), size: '10' });
+        if (selectedReason) reportQuery.set('reason', selectedReason);
+        const countRequests = REPORT_REASONS.map(async (reason) => {
+            const pageSize = 100;
+            const seenIds = new Set();
+            let count = 0;
+            for (let page = 1; page <= 100; page += 1) {
+                const params = new URLSearchParams({ status: 'open', page: String(page), size: String(pageSize), reason });
+                try {
+                    const result = await api('GET', `/moderation/reports?${params}`);
+                    const knownTotal = result.pagination && result.pagination.total;
+                    if (knownTotal !== undefined && knownTotal !== null && Number.isFinite(Number(knownTotal))) {
+                        return { reason, total: Number(knownTotal) };
+                    }
+                    const records = Array.isArray(result.data) ? result.data : [];
+                    let added = 0;
+                    for (const record of records) {
+                        if (record.reason !== reason || record.id === undefined || record.id === null) continue;
+                        const id = String(record.id);
+                        if (!seenIds.has(id)) { seenIds.add(id); count += 1; added += 1; }
+                    }
+                    if (records.length < pageSize) return { reason, total: count };
+                    if (!added) return { reason, total: null };
+                } catch (e) { return { reason, total: null }; }
+            }
+            return { reason, total: null };
+        });
+        const [rp, ...reasonCounts] = await Promise.all([
+            api('GET', `/moderation/reports?${reportQuery}`), ...countRequests
+        ]);
+        const countByReason = Object.fromEntries(reasonCounts.map((item) => [item.reason, item.total]));
+        const allReports = Array.isArray(rp.data) ? rp.data : [];
+        const filteredReports = selectedReason ? allReports.filter((x) => x.reason === selectedReason) : allReports;
+        const reportPagination = rp.pagination || {};
+        const hasFilteredCount = Boolean(selectedReason) && countByReason[selectedReason] !== null && countByReason[selectedReason] !== undefined;
+        const totalReports = hasFilteredCount
+            ? Number(countByReason[selectedReason])
+            : Number(reportPagination.total ?? filteredReports.length);
+        const totalPages = Math.max(1, hasFilteredCount ? Math.ceil(totalReports / 10) : Number(reportPagination.totalPages || Math.ceil(totalReports / 10) || 1));
+        const currentPage = Math.min(Number(reportPagination.page) || requestedPage, totalPages);
+        const reportRows = Object.keys(reportPagination).length > 0 || allReports.length <= 10
+            ? filteredReports
+            : filteredReports.slice((requestedPage - 1) * 10, requestedPage * 10);
+        const reasonFilter = el('select', { id: 'reportReasonFilter', 'aria-label': 'Lọc báo cáo theo lý do' },
+            el('option', { value: '', text: 'Tất cả lý do' }),
+            REPORT_REASONS.map((reason) => el('option', { value: reason, text: REPORT_REASON_LABELS[reason] })));
+        reasonFilter.value = selectedReason;
+        reasonFilter.addEventListener('change', () => {
+            const next = new URLSearchParams(query);
+            next.set('page', '1');
+            if (reasonFilter.value) next.set('reason', reasonFilter.value); else next.delete('reason');
+            location.hash = `#/moderation?${next}`;
+        });
+        const reasonStats = el('div', { class: 'report-stats', 'aria-label': 'Thống kê báo cáo theo lý do' },
+            REPORT_REASONS.map((reason) => el('div', { class: 'report-stat' },
+                el('span', { class: 'muted', text: REPORT_REASON_LABELS[reason] }),
+                el('strong', { text: countByReason[reason] === null ? '—' : String(countByReason[reason]) }))));
+        const rbox = el('div', { class: 'report-list' });
+        if (!reportRows.length) rbox.append(el('p', { class: 'muted', text: 'Không có báo cáo mở phù hợp với bộ lọc.' }));
+        for (const x of reportRows) {
             const handle = (decision) => async () => { try { await api('POST', `/moderation/reports/${x.id}/handle`, { decision }); toast('Đã xử lý'); route(); } catch (e) { toast(e.message); } };
-            rbox.append(el('div', { class: 'card' }, el('p', { class: 'muted', text: `Báo cáo #${x.id} · lý do: ${x.reason}` }), el('p', { text: x.reviewBody || x.body || '' }),
+            const reason = REPORT_REASONS.includes(x.reason) ? x.reason : 'other';
+            const reportMeta = el('div', { class: 'report-meta' },
+                el('span', { class: 'badge', text: reportReasonLabel(reason) }),
+                el('code', { class: 'enum-code', text: `enum: ${x.reason || 'không xác định'}` }));
+            const commentBody = x.reviewBody || (x.review && x.review.body) || x.body || '';
+            rbox.append(el('div', { class: 'card report-card' },
+                el('p', { class: 'muted', text: `Báo cáo #${x.id} · ${x.authorName || (x.review && x.review.authorName) || ''} · ${x.titleName || (x.review && x.review.titleName) || ''}` }),
+                reportMeta, el('p', { class: 'review-body', text: commentBody }),
                 el('button', { class: 'danger', text: 'Xác nhận vi phạm', onclick: handle('resolve') }), ' ', el('button', { class: 'primary', text: 'Bác bỏ', onclick: handle('dismiss') })));
         }
-        main.replaceChildren(el('h2', { text: 'Hàng đợi bình luận' }), box, el('h2', { text: 'Báo cáo vi phạm' }), rbox);
+        const reportPageLink = (pageNumber, label) => {
+            const next = new URLSearchParams(query);
+            next.set('page', String(pageNumber));
+            return el('a', { href: `#/moderation?${next}`, text: label });
+        };
+        const reportPager = el('div', { class: 'pager', 'aria-label': 'Phân trang báo cáo' },
+            currentPage > 1 ? reportPageLink(currentPage - 1, '← Trước') : null,
+            el('span', { text: `Trang ${currentPage}/${totalPages} · ${totalReports} báo cáo` }),
+            currentPage < totalPages ? reportPageLink(currentPage + 1, 'Sau →') : null);
+        main.replaceChildren(el('h2', { text: 'Hàng đợi bình luận' }), box,
+            el('h2', { text: 'Báo cáo vi phạm' }),
+            el('div', { class: 'card report-controls' }, el('label', { for: 'reportReasonFilter', text: 'Lọc theo lý do' }), reasonFilter),
+            reasonStats, rbox, reportPager);
     }
 
     async function pageStats() {
@@ -176,7 +385,7 @@
         const canvas = el('canvas', { id: 'chart', role: 'img', 'aria-label': 'Biểu đồ số lượt chấm theo thể loại' });
         const tb = el('tbody', {}); items.forEach((x) => tb.append(el('tr', {}, el('td', { text: x.name }), el('td', { text: x.titleCount }), el('td', { text: x.ratingCount }), el('td', { text: x.ratingAvg ?? '-' }))));
         main.replaceChildren(el('h2', { text: 'Thống kê theo thể loại' }), canvas,
-            el('table', {}, el('caption', { class: 'muted', text: 'Dữ liệu của biểu đồ' }), el('thead', {}, el('tr', {}, ['Thể loại', 'Số tác phẩm', 'Lượt chấm', 'Điểm TB'].map((h) => el('th', { scope: 'col', text: h })))), tb),
+            responsiveTable(el('table', {}, el('caption', { class: 'muted', text: 'Dữ liệu của biểu đồ' }), el('thead', {}, el('tr', {}, ['Thể loại', 'Số tác phẩm', 'Lượt chấm', 'Điểm TB'].map((h) => el('th', { scope: 'col', text: h })))), tb)),
             el('p', {}, el('a', { href: '/api/v1/stats/export?format=csv', text: 'Xuất CSV' }), ' · ', el('a', { href: '/api/v1/stats/export?format=xlsx', text: 'Xuất Excel' }), el('span', { class: 'muted', text: ' (chỉ ADMIN)' })));
         if (window.Chart) new window.Chart(canvas, { type: 'bar', data: { labels: items.map((x) => x.name), datasets: [{ label: 'Lượt chấm', data: items.map((x) => x.ratingCount), backgroundColor: '#1f3a5f' }] }, options: { responsive: true } });
     }
@@ -184,7 +393,7 @@
     async function pageLogs() {
         const r = await api('GET', '/admin/system-logs?size=30');
         const tb = el('tbody', {}); r.data.forEach((x) => tb.append(el('tr', {}, el('td', { text: x.createdAt }), el('td', { text: x.userName || x.userId || '-' }), el('td', { text: x.action }), el('td', { text: `${x.entity || ''} ${x.entityId || ''}` }), el('td', { text: x.ip || '' }))));
-        main.replaceChildren(el('h2', { text: 'Nhật ký hệ thống' }), el('table', {}, el('thead', {}, el('tr', {}, ['Thời điểm', 'Người dùng', 'Hành động', 'Đối tượng', 'IP'].map((h) => el('th', { scope: 'col', text: h })))), tb));
+        main.replaceChildren(el('h2', { text: 'Nhật ký hệ thống' }), responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Thời điểm', 'Người dùng', 'Hành động', 'Đối tượng', 'IP'].map((h) => el('th', { scope: 'col', text: h })))), tb)));
     }
 
 
@@ -251,7 +460,7 @@
         const mk = (pg, label) => { const b = new URLSearchParams(base); b.set('page', pg); return el('a', { href: '#/users?' + b, text: label }); };
         main.replaceChildren(el('h2', { text: 'Quản lý người dùng' }),
             el('div', { class: 'card row' }, el('div', {}, el('label', { for: 'uq', text: 'Tìm' }), kw), el('div', {}, el('label', { for: 'ust', text: 'Trạng thái' }), st), el('button', { class: 'primary', text: 'Lọc', onclick: go })),
-            el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Email', 'Tên hiển thị', 'Trạng thái', 'Vai trò', 'Thao tác'].map((h) => el('th', { scope: 'col', text: h })))), tb),
+            responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Email', 'Tên hiển thị', 'Trạng thái', 'Vai trò', 'Thao tác'].map((h) => el('th', { scope: 'col', text: h })))), tb)),
             el('div', { class: 'pager' }, page > 1 ? mk(page - 1, '← Trước') : '', el('span', { text: `Trang ${r.pagination.page}/${r.pagination.totalPages} · ${r.pagination.total} tài khoản` }), page < r.pagination.totalPages ? mk(page + 1, 'Sau →') : ''));
     }
 
@@ -282,7 +491,7 @@
         const loadPersons = async (qtext) => {
             const r = await api('GET', '/persons?size=10' + (qtext ? '&q=' + encodeURIComponent(qtext) : ''));
             const tb = el('tbody', {}); r.data.forEach((x) => tb.append(el('tr', {}, el('td', { text: x.id }), el('td', { text: x.fullName }), el('td', { text: x.birthYear || '' }), el('td', { text: x.country || '' }))));
-            plist.replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Họ tên', 'Năm sinh', 'Quốc gia'].map((h) => el('th', { scope: 'col', text: h })))), tb));
+            plist.replaceChildren(responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Họ tên', 'Năm sinh', 'Quốc gia'].map((h) => el('th', { scope: 'col', text: h })))), tb)));
         };
         const ps = el('input', { id: 'psq', type: 'search', placeholder: 'Tìm nhân vật' });
         const persons = el('div', {}, card('Thêm nhân vật', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'birthYear', label: 'Năm sinh', type: 'number', req: false }, { id: 'country', label: 'Quốc gia', req: false }], 'Thêm nhân vật', async (v) => {
@@ -296,7 +505,7 @@
                 el('td', {}, el('button', { class: 'danger', text: 'Xóa', onclick: async () => { try { await api('DELETE', `/genres/${g.id}`); toast('Đã xóa thể loại'); route(); } catch (e) { toast(errText(e)); } } })))));
             parts.push(el('h2', { text: 'Thể loại (ADMIN)' }),
                 card('Thêm thể loại', [{ id: 'code', label: 'Mã (a-z, 0-9, _ -)' }, { id: 'name', label: 'Tên thể loại' }], 'Thêm thể loại', async (v) => { await api('POST', '/genres', { code: v.code, name: v.name, appliesTo: 'both' }); toast('Đã thêm thể loại'); route(); }),
-                el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Tên', 'Áp dụng', 'Thao tác'].map((h) => el('th', { scope: 'col', text: h })))), gtb));
+                responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Tên', 'Áp dụng', 'Thao tác'].map((h) => el('th', { scope: 'col', text: h })))), gtb)));
         }
         main.replaceChildren(...parts); loadPersons('');
     }
@@ -309,10 +518,10 @@
             if (!parts.length) await pageList(qs || '');
             else if (parts[0] === 'login') pageLogin();
             else if (parts[0] === 'register') pageRegister();
-            else if (parts[0] === 'title') await pageTitle(Number(parts[1]));
-            else if (parts[0] === 'ranking') await pageRanking();
+            else if (parts[0] === 'title') await pageTitle(Number(parts[1]), qs || '');
+            else if (parts[0] === 'ranking') await pageRanking(qs || '');
             else if (parts[0] === 'watchlist') await pageWatchlist();
-            else if (parts[0] === 'moderation') await pageModeration();
+            else if (parts[0] === 'moderation') await pageModeration(qs || '');
             else if (parts[0] === 'stats') await pageStats();
             else if (parts[0] === 'logs') await pageLogs();
             else if (parts[0] === 'profile') await pageProfile();
