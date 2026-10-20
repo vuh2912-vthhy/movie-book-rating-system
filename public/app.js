@@ -83,13 +83,13 @@
     }
 
     function pageLogin() {
-        formPage('Đăng nhập', [{ id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu', type: 'password', ac: 'current-password' }], 'Đăng nhập', async (v) => {
+        formPage('Đăng nhập', [{ id: 'email', label: 'Email', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu', type: 'password', ac: 'current-password' }], 'Đăng nhập', async (v) => {
             await api('POST', '/auth/login', v); await loadMe(); toast('Đăng nhập thành công'); location.hash = '#/'; route();
         });
         main.append(el('p', {}, el('a', { href: '#/forgot', text: 'Quên mật khẩu?' })));
     }
     function pageRegister() {
-        formPage('Đăng ký', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'displayName', label: 'Tên hiển thị' }, { id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu (tối thiểu 8 ký tự)', type: 'password', ac: 'new-password', min: 8 }], 'Tạo tài khoản', async (v) => {
+        formPage('Đăng ký', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'displayName', label: 'Tên hiển thị' }, { id: 'email', label: 'Email', type: 'email', ac: 'username' }, { id: 'password', label: 'Mật khẩu (tối thiểu 8 ký tự)', type: 'password', ac: 'new-password', min: 8 }], 'Tạo tài khoản', async (v) => {
             if (!v.displayName) delete v.displayName;
             await api('POST', '/auth/register', v); toast('Đăng ký thành công, hãy đăng nhập'); location.hash = '#/login'; route();
         });
@@ -422,7 +422,7 @@
     function pageForgot() {
         const out = el('div', {});
         main.replaceChildren(el('h2', { text: 'Quên mật khẩu' }),
-            card('Nhận mã đặt lại', [{ id: 'email', label: 'Thư điện tử', type: 'email', ac: 'username' }], 'Gửi mã', async (v) => {
+            card('Nhận mã đặt lại', [{ id: 'email', label: 'Email', type: 'email', ac: 'username' }], 'Gửi mã', async (v) => {
                 const r = await api('POST', '/auth/forgot-password', v);
                 out.replaceChildren(el('p', { class: 'ok', text: r.message }));
                 if (r.data && r.data.simulatedEmail) {
