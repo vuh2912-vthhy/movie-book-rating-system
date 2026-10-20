@@ -193,13 +193,52 @@ test('TC-25 Thống kê thể loại: MODERATOR 200 có dữ liệu, USER bị 4
 test('TC-26 Xuất CSV (ADMIN): có BOM UTF-8 và đọc lại được đúng cấu trúc; MODERATOR bị 403', { skip: needAdmin }, async () => {
     const a = await login(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD); assert.equal(a.status, 200, a.text); S.admin = a.cookie;
     const r = await fetch(`${API}/stats/export?report=genres&format=csv`, { headers: { Cookie: S.admin } });
-    assert.equal(r.status, 200); const text = await r.text(); assert.ok(text.startsWith('\uFEFF'));
-    const rows = parseCsv(text); assert.ok(rows.length >= 2); assert.ok(rows.every((x) => x.length === rows[0].length));
+    assert.equal(r.status, 200, await r.clone().text());
+
+const bytes = Buffer.from(await r.arrayBuffer());
+
+assert.deepEqual(
+    [...bytes.subarray(0, 3)],
+    [0xEF, 0xBB, 0xBF],
+    'CSV phải bắt đầu bằng BOM UTF-8'
+);
+
+const text = bytes.toString('utf8');
+const rows = parseCsv(text);
+
+assert.ok(rows.length >= 2, 'CSV phải có tiêu đề và ít nhất một dòng dữ liệu');
+assert.ok(
+    rows.every((x) => x.length === rows[0].length),
+    'Các dòng CSV phải có cùng số cột'
+);
     if (S.mod) assert.equal((await http('GET', '/stats/export?report=genres&format=csv', { cookie: S.mod })).status, 403);
 });
-test('TC-27 Đối soát bảng tổng hợp (ADMIN): không có tác phẩm nào lệch so với bảng ratings', { skip: needAdmin }, async () => {
-    const r = await http('GET', '/admin/aggregates/reconcile', { cookie: S.admin });
+test('TC-27 Đối soát bảng tổng hợp (ADMIN): không có tác phẩm nào lệch so với bảng ratings',
+  { skip: needAdmin },
+  async () => {
+    const a = await login(
+      process.env.ADMIN_EMAIL,
+      process.env.ADMIN_PASSWORD
+    );
+
+    assert.equal(a.status, 200, `ADMIN đăng nhập thất bại: ${a.text}`);
+    S.admin = a.cookie;
+
+    assert.ok(S.admin, 'Không nhận được cookie phiên ADMIN');
+
+    const r = await http('GET', '/admin/aggregates/reconcile', {
+      cookie: S.admin
+    });
+
     assert.equal(r.status, 200, r.text);
-    const body = r.json.data || r.json; const mism = body.mismatches || body.mismatched || body.items || [];
-    assert.equal(Array.isArray(mism) ? mism.length : 0, 0, JSON.stringify(body).slice(0, 300));
-});
+
+    const body = r.json.data || r.json;
+    const mism = body.mismatches || body.mismatched || body.items || [];
+
+    assert.equal(
+      Array.isArray(mism) ? mism.length : 0,
+      0,
+      JSON.stringify(body).slice(0, 1000)
+    );
+  }
+);
