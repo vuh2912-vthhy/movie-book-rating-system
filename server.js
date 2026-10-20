@@ -7,6 +7,7 @@ const env = require('./src/config/env'); // kiểm tra biến môi trường nga
 const db = require('./src/config/database');
 const { notFoundHandler, errorHandler } = require('./src/middlewares/errorHandler');
 
+const requestId = require('./src/middlewares/requestId');
 const { securityHeaders, csrfProtection, authLimiter, apiLimiter } = require('./src/middlewares/securityMiddleware');
 
 const authRoutes = require('./src/routes/authRoutes');
@@ -18,17 +19,36 @@ const moderationRoutes = require('./src/routes/moderationRoutes');
 const meRoutes = require('./src/routes/meRoutes');
 const statsRoutes = require('./src/routes/statsRoutes');
 const fileRoutes = require('./src/routes/fileRoutes');
+const personRoutes = require('./src/routes/personRoutes');
 
 const app = express();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1); // phía sau proxy của Vercel: req.ip là IP thật của người dùng
 
+app.use(requestId);                          // mã định danh yêu cầu cho nhật ký lỗi
 app.use(securityHeaders);                    // BM12 + BM2: thẻ tiêu đề bảo mật, CSP
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 app.use('/api/v1', csrfProtection);          // BM3: chống giả mạo yêu cầu chéo trang
 app.use('/api/v1', apiLimiter);              // BM10: giới hạn tần suất chung
+
+// Tài liệu API tương tác (Swagger UI) và tệp đặc tả OpenAPI
+app.get('/api-docs', (req, res) => res.sendFile(path.join(__dirname, 'api-docs.html')));
+app.get('/openapi.yaml', (req, res) => {
+    res.type('text/yaml; charset=utf-8').sendFile(path.join(__dirname, 'openapi.yaml'));
+});
+
+// Hỗ trợ công cụ tìm kiếm: robots.txt và sitemap.xml (chỉ các trang công khai; giao diện dùng đường dẫn băm nên chỉ liệt kê trang gốc và tài liệu API)
+const origin = (req) => `${req.protocol}://${req.get('host')}`;
+app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${origin(req)}/sitemap.xml\n`);
+});
+app.get('/sitemap.xml', (req, res) => {
+    const day = new Date().toISOString().slice(0, 10);
+    const urls = ['/', '/api-docs'].map((u) => `  <url><loc>${origin(req)}${u}</loc><lastmod>${day}</lastmod></url>`).join('\n');
+    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
+});
 
 app.use('/public', express.static(path.join(__dirname, 'public'), { maxAge: '1d', index: false }));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
@@ -56,6 +76,7 @@ app.use('/api/v1/moderation', moderationRoutes);
 app.use('/api/v1/me', meRoutes);
 app.use('/api/v1/stats', statsRoutes);
 app.use('/api/v1/files', fileRoutes);
+app.use('/api/v1/persons', personRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

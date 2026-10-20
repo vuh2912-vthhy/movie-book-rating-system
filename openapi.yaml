@@ -1,13 +1,15 @@
 openapi: 3.0.3
 info:
   title: Movie & Book Rating API
-  version: 1.3.0
+  version: 1.4.0
   description: >
     Hệ thống đánh giá và phân tích dữ liệu phim/sách (CSE702051, đề tài 11).
     Xác thực bằng cookie `accessToken` (HttpOnly) phát khi đăng nhập.
-    Mọi lỗi dùng chung cấu trúc `{ success:false, error:{ code, message, details } }`.
+    Mọi lỗi dùng chung cấu trúc `{ success:false, error:{ code, message, details, requestId } }`; `requestId` trùng tiêu đề `X-Request-Id` và dòng nhật ký phía máy chủ.
     Xếp hạng dùng điểm có xét độ tin cậy: weighted_score = (v*R + m*C) / (v + m), m = 25.
 servers:
+  - url: /api/v1
+    description: Cùng máy chủ với trang tài liệu (dùng cho nút Try it out)
   - url: http://localhost:3000/api/v1
     description: Máy cục bộ
   - url: https://movie-book-rating-system.vercel.app/api/v1
@@ -22,6 +24,9 @@ tags:
   - name: Cá nhân
   - name: Thống kê
   - name: Quản trị
+  - name: Tài khoản
+  - name: Quản trị người dùng
+  - name: Tệp
 paths:
   /health:
     get:
@@ -96,6 +101,17 @@ paths:
                 properties:
                   success: { type: boolean }
                   data: { type: array, items: { $ref: '#/components/schemas/Genre' } }
+    post:
+      tags: [Danh mục]
+      summary: "Tạo thể loại (genre.manage: ADMIN)"
+      security: [{ cookieAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GenreInput' } } } }
+      responses:
+        '201': { description: "Đã tạo" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: "GENRE_CODE_TAKEN", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
   /titles:
     get:
       tags: [Danh mục]
@@ -664,6 +680,221 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '501': { description: "Máy chủ chưa cài thư viện exceljs (XLSX_UNAVAILABLE)", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /auth/change-password:
+    post:
+      tags: [Tài khoản]
+      summary: Đổi mật khẩu (cần mật khẩu hiện tại); mọi thẻ đang dùng bị thu hồi
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 8, maxLength: 72, description: "Có cả chữ cái và chữ số, khác mật khẩu hiện tại" }
+      responses:
+        '200': { description: "Đã đổi; cookie bị xóa, phải đăng nhập lại" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /auth/forgot-password:
+    post:
+      tags: [Tài khoản]
+      summary: Xin mã đặt lại mật khẩu (mô phỏng gửi thư)
+      description: "Luôn trả cùng một thông điệp dù email có tồn tại hay không. Khi MAIL_SIMULATION=true, mã được trả trong `data.simulatedEmail.resetCode` (hệ thống học tập không có SMTP). Chỉ băm SHA-256 của mã được lưu; mã sống 30 phút và dùng một lần."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email } } } } }
+      responses:
+        '200': { description: "Đã xử lý yêu cầu" }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /auth/reset-password:
+    post:
+      tags: [Tài khoản]
+      summary: Đặt lại mật khẩu bằng mã dùng một lần
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string, pattern: '^[a-f0-9]{64}$' }
+                newPassword: { type: string, minLength: 8, maxLength: 72 }
+      responses:
+        '200': { description: "Đã đặt lại; mọi thẻ cũ bị thu hồi, xóa khóa tạm" }
+        '422': { description: "Mã sai, hết hạn hoặc đã dùng (RESET_TOKEN_INVALID) hoặc dữ liệu sai", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /me/profile:
+    get:
+      tags: [Tài khoản]
+      summary: Hồ sơ của chính mình
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: "Thông tin hồ sơ" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    put:
+      tags: [Tài khoản]
+      summary: Cập nhật họ tên và tên hiển thị
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { fullName: { type: string, minLength: 2, maxLength: 120 }, displayName: { type: string, minLength: 2, maxLength: 60 } } } } }
+      responses:
+        '200': { description: "Đã cập nhật" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /admin/users:
+    get:
+      tags: [Quản trị người dùng]
+      summary: "Tra cứu người dùng (quyền user.manage: ADMIN)"
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: status, in: query, schema: { type: string, enum: [active, locked, pending] } }
+        - { name: role, in: query, schema: { type: string, enum: [ADMIN, MODERATOR, USER] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+      responses:
+        '200': { description: "Danh sách có phân trang" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /admin/users/{id}/lock:
+    post:
+      tags: [Quản trị người dùng]
+      summary: "Khóa tài khoản (user.manage); thẻ đang dùng mất hiệu lực ngay; không tự khóa mình"
+      security: [{ cookieAuth: [] }]
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      responses:
+        '200': { description: "Đã khóa" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "CANNOT_LOCK_SELF", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /admin/users/{id}/unlock:
+    post:
+      tags: [Quản trị người dùng]
+      summary: "Mở khóa tài khoản (user.manage)"
+      security: [{ cookieAuth: [] }]
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      responses:
+        '200': { description: "Đã mở khóa" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/users/{id}/role:
+    put:
+      tags: [Quản trị người dùng]
+      summary: "Đổi vai trò (role.manage); không tự hạ quyền; phải còn ít nhất một ADMIN hoạt động"
+      security: [{ cookieAuth: [] }]
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [role], properties: { role: { type: string, enum: [ADMIN, MODERATOR, USER] } } } } }
+      responses:
+        '200': { description: "Đã đổi vai trò" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "LAST_ADMIN", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /genres/{id}:
+    put:
+      tags: [Danh mục]
+      summary: "Sửa thể loại (genre.manage: ADMIN)"
+      security: [{ cookieAuth: [] }]
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GenreInput' } } } }
+      responses:
+        '200': { description: "Đã cập nhật" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Danh mục]
+      summary: "Xóa thể loại chưa được tác phẩm nào dùng (genre.manage)"
+      security: [{ cookieAuth: [] }]
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      responses:
+        '200': { description: "Đã xóa" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "GENRE_IN_USE", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /persons:
+    get:
+      tags: [Danh mục]
+      summary: Tra cứu nhân vật (đạo diễn, diễn viên, tác giả)
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+      responses:
+        '200': { description: "Danh sách có phân trang" }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      tags: [Danh mục]
+      summary: "Thêm nhân vật (person.manage: MODERATOR, ADMIN)"
+      security: [{ cookieAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PersonInput' } } } }
+      responses:
+        '201': { description: "Đã tạo" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /persons/{id}:
+    get:
+      tags: [Danh mục]
+      summary: Chi tiết nhân vật
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      responses:
+        '200': { description: "Thông tin nhân vật" }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    put:
+      tags: [Danh mục]
+      summary: "Sửa nhân vật (person.manage)"
+      security: [{ cookieAuth: [] }]
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PersonInput' } } } }
+      responses:
+        '200': { description: "Đã cập nhật" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /files/titles/{id}/poster:
+    post:
+      tags: [Tệp]
+      summary: "Tải ảnh bìa tác phẩm (title.update: MODERATOR, ADMIN)"
+      description: "Tối đa 2 MB; chỉ JPEG, PNG, WebP, xác định theo chữ ký tệp (không tin phần mở rộng hay Content-Type); tên lưu ngẫu nhiên; lưu trong CSDL."
+      security: [{ cookieAuth: [] }]
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } }
+      responses:
+        '201': { description: "Đã tải" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { description: "FILE_TOO_LARGE", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '415': { description: "INVALID_FILE_SIGNATURE", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /files/{id}:
+    get:
+      tags: [Tệp]
+      summary: "Lấy ảnh bìa (công khai; kiểu nội dung do máy chủ xác định, kèm nosniff)"
+      parameters: [ { $ref: '#/components/parameters/TitleId' } ]
+      responses:
+        '200': { description: "Ảnh", content: { image/png: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   securitySchemes:
     cookieAuth:
@@ -710,6 +941,20 @@ components:
       description: Không kết nối được cơ sở dữ liệu (DB_UNAVAILABLE)
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
   schemas:
+    GenreInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, pattern: '^[a-z0-9_-]{2,32}$' }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        appliesTo: { type: string, enum: [movie, book, both], default: both }
+    PersonInput:
+      type: object
+      required: [fullName]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 120 }
+        birthYear: { type: integer, minimum: 1800, maximum: 2100, nullable: true }
+        country: { type: string, maxLength: 60, nullable: true }
     Error:
       type: object
       properties:
@@ -719,6 +964,7 @@ components:
           properties:
             code: { type: string, example: VALIDATION_FAILED }
             message: { type: string }
+            requestId: { type: string, description: "Mã định danh yêu cầu, trùng tiêu đề X-Request-Id" }
             details:
               type: array
               items:

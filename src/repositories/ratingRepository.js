@@ -6,6 +6,7 @@
 //   2) Khóa dòng ratings của (user, title): hai yêu cầu cùng người dùng không tạo bản ghi trùng.
 //   3) Tính lại COUNT/SUM từ bảng ratings (nguồn sự thật), không cộng dồn "lệch" ở tầng ứng dụng.
 const db = require('../config/database');
+const { average2, weightedScore } = require('../utils/rankingMath');
 const { withTransaction } = require('../utils/transaction');
 
 const round = (value, digits) => Number(value.toFixed(digits));
@@ -28,9 +29,8 @@ async function recomputeAggregate(conn, titleId, minVotes, fallbackPrior) {
     const count = Number(rows[0].c);
     const sum = Number(rows[0].s);
     const prior = await priorMeanFromAggregates(conn, fallbackPrior);
-    // Trung bình làm tròn 2 chữ số theo kiểu ROUND() của MySQL (0,5 làm tròn lên), tính bằng số nguyên để không sai số dấu phẩy động
-    const average = count > 0 ? Math.floor((sum * 200 + count) / (count * 2)) / 100 : null;
-    const weighted = round((sum + minVotes * prior) / (count + minVotes), 4);
+    const average = average2(sum, count);
+    const weighted = weightedScore(sum, count, minVotes, prior);
 
     await conn.query(
         `UPDATE aggregates

@@ -2,6 +2,7 @@
 const ranking = require('../config/ranking');
 const AggregateRepository = require('../repositories/aggregateRepository');
 const AuditLogService = require('./auditLogService');
+const cache = require('../utils/cache');
 
 class AggregateService {
     static async reconcile() {
@@ -22,6 +23,7 @@ class AggregateService {
 
     static async rebuild(user, ip) {
         const result = await AggregateRepository.rebuildAll(ranking.minVotes, ranking.fallbackPriorMean);
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'AGGREGATES_REBUILD', 'aggregates', null, ip);
         return { ...result, minVotes: ranking.minVotes };
     }

@@ -2,7 +2,7 @@
 const HttpError = require('../utils/httpError');
 
 // Mọi lỗi trả về cùng một cấu trúc:
-// { "success": false, "error": { "code": "...", "message": "...", "details": [...] } }
+// { "success": false, "error": { "code": "...", "message": "...", "details": [...], "requestId": "..." } }
 const notFoundHandler = (req, res, next) => {
     const path = req.originalUrl.split('?')[0];
     next(HttpError.notFound(`Không tìm thấy ${req.method} ${path}`));
@@ -37,10 +37,10 @@ const errorHandler = (err, req, res, next) => {
 
     // Lỗi 5xx: ghi chi tiết ở máy chủ, KHÔNG trả chi tiết cho người dùng (BM9).
     if (status >= 500) {
-        console.error(`[error] ${req.method} ${req.originalUrl}`, (err && err.stack) || err);
+        console.error(`[error] ${req.id || '-'} ${req.method} ${req.originalUrl}`, (err && err.stack) || err);
     }
 
-    res.status(status).json({ success: false, error: { code, message, details } });
+    res.status(status).json({ success: false, error: { code, message, details, requestId: req.id } });
 };
 
 module.exports = { notFoundHandler, errorHandler };

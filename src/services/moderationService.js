@@ -5,6 +5,7 @@ const { validateModerate, validateHandle, validateEnumQuery, REVIEW_STATUSES, RE
 const ReviewRepository = require('../repositories/reviewRepository');
 const ReportRepository = require('../repositories/reportRepository');
 const AuditLogService = require('./auditLogService');
+const cache = require('../utils/cache');
 const NotificationService = require('./notificationService');
 
 const ACTION_AUDIT = { approve: 'REVIEW_APPROVE', reject: 'REVIEW_REJECT', hide: 'REVIEW_HIDE', restore: 'REVIEW_RESTORE' };
@@ -48,6 +49,7 @@ class ModerationService {
             ], 'INVALID_TRANSITION');
         }
 
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, ACTION_AUDIT[value.action], 'reviews', reviewId, ip);
         await NotificationService.notify([{
             userId: result.authorId,
@@ -86,9 +88,11 @@ class ModerationService {
         if (result.notFound) throw HttpError.notFound('Không tìm thấy báo cáo', 'REPORT_NOT_FOUND');
         if (result.closed) throw HttpError.unprocessable('Báo cáo này đã được xử lý', [invalid('report', 'Báo cáo không còn ở trạng thái mở', 'REPORT_CLOSED')], 'REPORT_CLOSED');
 
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, value.decision === 'resolve' ? 'REPORT_RESOLVE' : 'REPORT_DISMISS', 'reports', reportId, ip);
         const notes = [];
         if (result.hidden) {
+            cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
             await AuditLogService.logAction(user.id, 'REVIEW_HIDE', 'reviews', result.review.id, ip);
             notes.push({ userId: result.review.authorId, type: 'REVIEW_HIDDEN', message: reviewMessage('hide', result.review.titleName), entity: 'reviews', entityId: result.review.id });
         }

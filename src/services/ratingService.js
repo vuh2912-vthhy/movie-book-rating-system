@@ -1,5 +1,6 @@
 'use strict';
 const HttpError = require('../utils/httpError');
+const cache = require('../utils/cache');
 const { parseId } = require('../utils/params');
 const { validateRatingInput } = require('../utils/titleValidators');
 const ranking = require('../config/ranking');
@@ -40,6 +41,7 @@ class RatingService {
         });
         if (!result) throw notFound();
 
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'RATING_UPSERT', 'ratings', result.ratingId, ip);
         return {
             created: result.created,
@@ -59,6 +61,7 @@ class RatingService {
         });
         if (!result) throw HttpError.notFound('Bạn chưa chấm điểm tác phẩm này', 'RATING_NOT_FOUND');
 
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'RATING_DELETE', 'ratings', result.ratingId, ip);
         return { titleId: id, stats: result.stats };
     }

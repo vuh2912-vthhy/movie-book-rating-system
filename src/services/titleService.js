@@ -8,6 +8,7 @@ const GenreRepository = require('../repositories/genreRepository');
 const PersonRepository = require('../repositories/personRepository');
 const RatingRepository = require('../repositories/ratingRepository');
 const AuditLogService = require('./auditLogService');
+const cache = require('../utils/cache');
 
 const isStaff = (user) => Boolean(user && user.permissions.includes('title.update'));
 
@@ -110,6 +111,7 @@ class TitleService {
 
         const prior = await RatingRepository.currentPriorMean(ranking.fallbackPriorMean);
         const created = await TitleRepository.create(value, user.id, prior);
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'TITLE_CREATE', 'titles', created.id, ip);
         return created;
     }
@@ -125,6 +127,7 @@ class TitleService {
 
         const ok = await TitleRepository.replace(id, value);
         if (!ok) throw HttpError.notFound('Không tìm thấy tác phẩm', 'TITLE_NOT_FOUND');
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'TITLE_UPDATE', 'titles', id, ip);
         return { id, code: existing.code };
     }
@@ -134,6 +137,7 @@ class TitleService {
         const id = parseId(idRaw);
         const ok = await TitleRepository.setStatus(id, 'hidden');
         if (!ok) throw HttpError.notFound('Không tìm thấy tác phẩm', 'TITLE_NOT_FOUND');
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'TITLE_DELETE', 'titles', id, ip);
     }
 }

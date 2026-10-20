@@ -4,7 +4,7 @@
     {
       "src": "server.js",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["index.html", "public/**"] }
+      "config": { "includeFiles": ["index.html", "api-docs.html", "openapi.yaml", "public/**"] }
     }
   ],
   "routes": [

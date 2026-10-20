@@ -13,7 +13,9 @@
     "evidence": "node scripts/evidence.js",
     "evidence:bm": "node scripts/bm-evidence.js",
     "perf": "node scripts/perf-measure.js",
-    "pack": "bash scripts/pack.sh"
+    "pack": "bash scripts/pack.sh",
+    "test": "node --test tests/unit/*.test.js",
+    "test:api": "node --test tests/api/*.test.js"
   },
   "keywords": [],
   "author": "",

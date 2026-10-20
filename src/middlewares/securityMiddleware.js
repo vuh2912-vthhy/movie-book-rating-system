@@ -18,12 +18,15 @@ const CSP = [
     "form-action 'self'"
 ].join('; ');
 
+const CSP_DOCS = CSP.replace("style-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net")
+    .replace("img-src 'self' data:", "img-src 'self' data: https://cdn.jsdelivr.net");
+
 const securityHeaders = (req, res, next) => {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Content-Security-Policy', CSP);
+    res.setHeader('Content-Security-Policy', req.path === '/api-docs' ? CSP_DOCS : CSP);
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
 };

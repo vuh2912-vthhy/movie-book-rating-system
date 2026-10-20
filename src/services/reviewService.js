@@ -5,6 +5,7 @@ const { validateReviewBody, validateEnumQuery, REVIEW_SORTS } = require('../util
 const TitleRepository = require('../repositories/titleRepository');
 const ReviewRepository = require('../repositories/reviewRepository');
 const AuditLogService = require('./auditLogService');
+const cache = require('../utils/cache');
 
 const toMine = (r) => ({
     id: r.id, body: r.body, status: r.status, createdAt: r.created_at, updatedAt: r.updated_at || null
@@ -74,6 +75,7 @@ class ReviewService {
             }
             throw error;
         }
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'REVIEW_CREATE', 'reviews', id, ip);
         return { id, status: 'pending' };
     }
@@ -87,6 +89,7 @@ class ReviewService {
         if (result.notFound) throw HttpError.notFound('Bạn chưa bình luận tác phẩm này', 'REVIEW_NOT_FOUND');
         if (result.blocked) throw HttpError.forbidden('Bình luận đã bị ẩn do vi phạm, không thể chỉnh sửa', 'REVIEW_HIDDEN');
 
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'REVIEW_UPDATE', 'reviews', result.id, ip);
         return { id: result.id, status: 'pending', previousStatus: result.previousStatus };
     }
@@ -95,6 +98,7 @@ class ReviewService {
         const titleId = parseId(titleIdRaw);
         const result = await ReviewRepository.removeMine({ userId: user.id, titleId });
         if (result.notFound) throw HttpError.notFound('Bạn chưa bình luận tác phẩm này', 'REVIEW_NOT_FOUND');
+        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
         await AuditLogService.logAction(user.id, 'REVIEW_DELETE', 'reviews', result.id, ip);
         return { id: result.id };
     }

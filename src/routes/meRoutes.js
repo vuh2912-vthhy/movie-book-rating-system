@@ -5,6 +5,10 @@ const { verifyToken, authorize } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
+// Hồ sơ của chính mình: mọi người dùng đã đăng nhập
+router.get('/profile', verifyToken, MeController.getProfile);
+router.put('/profile', verifyToken, MeController.updateProfile);
+
 // Bình luận của tôi (mọi trạng thái)
 router.get('/reviews', verifyToken, MeController.listReviews);
 

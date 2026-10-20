@@ -1,5 +1,3 @@
-# Hệ thống Đánh giá và Phân tích Dữ liệu Phim/Sách
-
 # Hệ thống Đánh giá và Phân tích Dữ liệu Phim/Sách (DT11 – CSE702051)
 
 Nhóm 5 · Lớp học phần N03 · Nhánh công nghệ B (Node.js/Express + MySQL 8, triển khai Vercel + Aiven).
@@ -18,7 +16,10 @@ Yêu cầu: Node.js 20+, MySQL 8.0.
 cp .env.example .env            # Windows PowerShell: Copy-Item .env.example .env ; rồi sửa DB_*, JWT_SECRET
 mysql -u root -p -e "CREATE DATABASE doan_db CHARACTER SET utf8mb4"
 mysql -u root -p doan_db < db/schema.mysql.sql
-mysql -u root -p doan_db < db/05_add_file_content.sql
+mysql -u root -p doan_db < db/02_migrate_permission_aggregate_rebuild.sql   # quyền dựng lại tổng hợp
+mysql -u root -p doan_db < db/04_add_stats_permission.sql                   # quyền thống kê
+mysql -u root -p doan_db < db/05_add_file_content.sql                       # cột lưu ảnh bìa
+mysql -u root -p doan_db < db/08_account_catalog_extensions.sql             # khôi phục mật khẩu, quản lý thể loại/nhân vật
 mysql -u root -p doan_db < db/seed.sql          # tài khoản demo dùng chung một mã băm (xem mục 4)
 npm install
 npm start                       # http://localhost:3000
@@ -27,19 +28,21 @@ curl -i http://localhost:3000/api/v1/health     # 200 OK
 Sinh `JWT_SECRET`: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`
 
 ## 3. Biến môi trường
-Xem `.env.example` (không chứa giá trị thật). Bắt buộc: `DB_HOST, DB_USER, DB_NAME, JWT_SECRET (≥32 ký tự)`.
+Xem `.env.example` (không chứa giá trị thật). Biến tùy chọn mới: `MAIL_SIMULATION` (mô phỏng gửi thư đặt lại mật khẩu), `RESET_TOKEN_MINUTES`, `STATS_CACHE_TTL_SECONDS` (bộ nhớ đệm thống kê; 0 là tắt). Bắt buộc: `DB_HOST, DB_USER, DB_NAME, JWT_SECRET (≥32 ký tự)`.
 Trên Vercel khai báo cùng tên biến trong Project Settings → Environment Variables. **Không commit `.env`.**
 
 ## 4. Tài khoản kiểm thử
-Mật khẩu demo: `aahhn123`
-| Vai trò | Email |
-|---|---|
-| ADMIN | `admin01@demo.local` |
-| MODERATOR | `mod01@demo.local`, `mod02@demo.local` |
-| USER | `user001@demo.local` ... `user397@demo.local` |
-(bảng đầy đủ: Phụ lục B báo cáo).
+`<điền bảng: admin01@demo.local, mod01@demo.local, user…@demo.local và mật khẩu demo>` (bảng đầy đủ: Phụ lục B báo cáo).
+
+## 4b. Tài liệu API, sitemap
+- Tài liệu tương tác (Swagger UI): `/api-docs`; đặc tả OpenAPI 3.0: `/openapi.yaml` (cũng là tệp `openapi.yaml` ở thư mục gốc).
+- `/robots.txt`, `/sitemap.xml` cho công cụ tìm kiếm.
 
 ## 5. Kiểm thử và bằng chứng
+```bash
+npm test                      # 34 ca kiểm thử đơn vị (không cần CSDL): công thức xếp hạng, đệm, CSRF, giới hạn tần suất, dịch vụ tài khoản...
+BASE_URL=https://<url> MOD_EMAIL=... MOD_PASSWORD=... ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run test:api   # 27 ca API tích hợp
+```
 ```bash
 npm run smoke                                   # đăng nhập, phân quyền
 BASE=https://<url> DEMO_PASSWORD=... node scripts/evidence.js $BASE      # BM4, BM5, nhật ký
@@ -52,17 +55,3 @@ Hiệu năng: `db/06_perf_load.sql` (nạp 5 000 tác phẩm), `db/07_explain_be
 
 ## 6. Đóng gói
 `bash scripts/pack.sh CSE702051_N03_Nhom05_DT11` (loại `.env`, `node_modules`, `.git`; kiểm tra chuỗi bí mật trước khi nén).
-
-
-### Bảng phiên bản chuẩn của nhóm
-| Công cụ / Môi trường | Phiên bản yêu cầu |
-|----------------------|-------------------|
-| Hệ điều hành         | Windows 10/11     |
-| Trình duyệt kiểm thử | Google Chrome 120+|
-| Ngôn ngữ (Node.js)   | v20.11.0          |
-| Trình quản lý gói    | npm 10.2.4        |
-| Quản lý phiên bản Git| 2.43.0            |
-| Cơ sở dữ liệu        | MySQL 8.0         |
-| Công cụ soạn thảo    | VS Code           |
-
-*Ghi chú: Vui lòng chạy lệnh `node -v` và `git --version` trước khi code để đảm bảo đúng môi trường.*

@@ -3,8 +3,21 @@
 const ReviewService = require('../services/reviewService');
 const WatchlistService = require('../services/watchlistService');
 const NotificationService = require('../services/notificationService');
+const AccountService = require('../services/accountService');
 
 class MeController {
+    static async getProfile(req, res, next) {
+        try {
+            res.status(200).json({ success: true, data: await AccountService.getProfile(req.user) });
+        } catch (error) { next(error); }
+    }
+
+    static async updateProfile(req, res, next) {
+        try {
+            res.status(200).json({ success: true, message: 'Đã cập nhật hồ sơ', data: await AccountService.updateProfile(req.user, req.body, req.ip) });
+        } catch (error) { next(error); }
+    }
+
     static async listReviews(req, res, next) {
         try {
             const { items, pagination } = await ReviewService.listMine(req.user, req.query);
