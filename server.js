@@ -54,10 +54,10 @@ app.use('/public', express.static(path.join(__dirname, 'public'), { maxAge: '1d'
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // Kiểm tra sống: dùng cho giám sát và để "làm nóng" hàm serverless trước giờ chấm
-app.get('/api/v1/health', async (req, res) => {
+app.get(['/api/v1/health', '/healthz'], async (req, res) => {   // /healthz: tên chuẩn của tài liệu môn học
     try {
         await db.query('SELECT 1');
-        res.status(200).json({ success: true, data: { status: 'ok' } });
+        res.status(200).json({ success: true, trangThai: 'ok', data: { status: 'ok' } });
     } catch (error) {
         console.error('[health] Lỗi kết nối CSDL:', error.code || error.message);
         res.status(503).json({

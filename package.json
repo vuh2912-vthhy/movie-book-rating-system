@@ -14,6 +14,7 @@
     "evidence:bm": "node scripts/bm-evidence.js",
     "perf": "node scripts/perf-measure.js",
     "pack": "bash scripts/pack.sh",
+    "demo:concurrency": "node scripts/concurrency-demo.js",
     "test": "node --test tests/unit/*.test.js",
     "test:api": "node --test tests/api/*.test.js"
   },

@@ -3,7 +3,8 @@
 Nhóm 5 · Lớp học phần N03 · Nhánh công nghệ B (Node.js/Express + MySQL 8, triển khai Vercel + Aiven).
 Dữ liệu mô phỏng phục vụ mục đích học tập.
 
-- Địa chỉ trực tuyến: `<điền URL Vercel>`  ·  Repository: `<điền liên kết>`
+- Địa chỉ trực tuyến: https://movie-book-rating-system.vercel.app/
+- Repository: https://github.com/vuh2912-vthhy/movie-book-rating-system.git
 
 ## 1. Kiến trúc
 Controller → Service → Repository (`src/controllers`, `src/services`, `src/repositories`), middleware xác thực/phân quyền/bảo mật (`src/middlewares`),
@@ -32,8 +33,12 @@ Xem `.env.example` (không chứa giá trị thật). Biến tùy chọn mới: 
 Trên Vercel khai báo cùng tên biến trong Project Settings → Environment Variables. **Không commit `.env`.**
 
 ## 4. Tài khoản kiểm thử
-`<điền bảng: admin01@demo.local, mod01@demo.local, user…@demo.local và mật khẩu demo>` (bảng đầy đủ: Phụ lục B báo cáo).
-
+| Vai trò   | Email                                         |
+|-----------|-----------------------------------------------|
+| ADMIN     | `admin01@demo.local`                          |
+| MODERATOR | `mod01@demo.local`, `mod02@demo.local`        |
+| USER      | `user001@demo.local` ... `user397@demo.local` | (bảng đầy đủ: Phụ lục B báo cáo).
+Mật khẩu demo: aahhn123
 ## 4b. Tài liệu API, sitemap
 - Tài liệu tương tác (Swagger UI): `/api-docs`; đặc tả OpenAPI 3.0: `/openapi.yaml` (cũng là tệp `openapi.yaml` ở thư mục gốc).
 - `/robots.txt`, `/sitemap.xml` cho công cụ tìm kiếm.

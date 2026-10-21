@@ -37,6 +37,7 @@ const p95 = (v) => { const s = [...v].sort((x, y) => x - y); return s[Math.min(s
     const id = ((first.data && (first.data.items || first.data)) || [{ id: 1 }])[0].id;
     const targets = [
         ['GET /titles?page=1&size=20', '/titles?page=1&size=20', false],
+        ['GET /titles?kind=movie&yearFrom=1990&yearTo=2010&sort=year', '/titles?kind=movie&yearFrom=1990&yearTo=2010&sort=year&size=20', false],
         ['GET /titles?keyword=mo phong&kind=movie', '/titles?keyword=mo%20phong&kind=movie&size=20', false],
         [`GET /titles/${id}`, `/titles/${id}`, false],
         ['GET /stats/ranking?source=live', '/stats/ranking?source=live&limit=20', false],

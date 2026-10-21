@@ -1,0 +1,21 @@
+# Bật tại GitHub: Settings -> Branches -> Branch protection rules -> Require status checks to pass cho nhánh main.
+name: kiem-tra
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [develop]
+jobs:
+  kiem-tra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 34 ca kiểm thử đơn vị, không cần cơ sở dữ liệu
+      - run: npm test
+      # Quét lỗ hổng phụ thuộc; chỉ chặn mức cao trở lên
+      - run: npm audit --audit-level=high
