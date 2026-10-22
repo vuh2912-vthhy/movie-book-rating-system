@@ -28,7 +28,6 @@ class GenreRepository {
         return res.affectedRows;
     }
 
-    // Xóa nguyên tử: chỉ xóa khi không tác phẩm nào dùng (không kiểm tra rồi mới xóa)
     static async deleteIfUnused(id) {
         const [res] = await db.query(
             'DELETE FROM genres WHERE id = ? AND NOT EXISTS (SELECT 1 FROM title_genres tg WHERE tg.genre_id = genres.id)', [id]);

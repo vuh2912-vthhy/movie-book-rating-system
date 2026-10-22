@@ -5,7 +5,6 @@ const DIGITS = /^\d{1,15}$/;
 
 const invalid = (field, message, code = 'INVALID') => ({ field, code, message });
 
-// Mã tài nguyên trên đường dẫn: số nguyên dương. Sai định dạng -> 422 (không phải 500 hay 404)
 function parseId(value, field = 'id') {
     const text = typeof value === 'string' ? value : '';
     const id = DIGITS.test(text) ? Number(text) : 0;
@@ -15,7 +14,6 @@ function parseId(value, field = 'id') {
     return id;
 }
 
-// Đọc một tham số số nguyên từ query string. Trả về { value, error }.
 function readInt(raw, field, { min, max, defaultValue }) {
     if (raw === undefined || raw === '') return { value: defaultValue };
     if (typeof raw !== 'string' || !/^-?\d{1,9}$/.test(raw)) {
@@ -28,7 +26,6 @@ function readInt(raw, field, { min, max, defaultValue }) {
     return { value };
 }
 
-// ?page=1&size=10. size vượt trần thì cắt về trần; page/size sai kiểu hoặc <= 0 thì 422.
 function parsePagination(query, { defaultSize = 10, maxSize = 50 } = {}) {
     const q = query || {};
     const errors = [];

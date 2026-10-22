@@ -1,14 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Minh chứng truy cập đồng thời cho nghiệp vụ chấm điểm (Ảnh 31, Mục 3.6 và 6.3).
- *   node scripts/concurrency-demo.js https://movie-book-rating-system.vercel.app [--n=20]
- * Tự tạo N người dùng dùng một lần (concdemo_...) cùng chấm điểm MỘT tác phẩm trong cùng một lúc, và một người dùng
- * thêm bấm chấm 30 lần song song. Kỳ vọng: số lượt chấm tăng đúng N + 1 (mỗi người một điểm, không mất, không trùng),
- * đúng một yêu cầu trong 30 yêu cầu của cùng một người trả 201, các yêu cầu còn lại 200. Cuối cùng xóa các điểm đã tạo
- * và kiểm tra số lượt chấm trở về giá trị ban đầu. Chỉ chạy trên hệ thống của nhóm. Mỗi lần chạy dùng khoảng N+1 yêu cầu
- * đăng ký và N+1 yêu cầu đăng nhập: chạy lại quá nhiều lần trong 15 phút sẽ chạm giới hạn tần suất.
- */
+
 const BASE = (process.argv.find((a) => a.startsWith('http')) || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const N = Number((process.argv.find((a) => a.startsWith('--n=')) || '--n=20').slice(4));
 const API = `${BASE}/api/v1`;

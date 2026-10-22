@@ -1,12 +1,5 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Bằng chứng BM1, BM2, BM3, BM6-BM10, BM12 (in rõ máy chủ, thời điểm, yêu cầu, phản hồi để chụp ảnh).
- *   node scripts/bm-evidence.js https://ten-mien.vercel.app
- *   node scripts/bm-evidence.js                       -> http://localhost:3000
- * Chỉ chạy trên hệ thống CỦA NHÓM. Chạy riêng từng phần: --only=bm1|bm2|bm3|bm7|bm8|bm9|bm10|bm12
- * BM4/BM5 dùng scripts/evidence.js; BM6 dùng truy vấn SQL (xem README mục Bằng chứng); BM11 dùng lệnh git log (xem README).
- */
 const BASE = (process.argv.find((a, i) => i > 1 && a.startsWith('http')) || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
 const API = `${BASE}/api/v1`;

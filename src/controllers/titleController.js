@@ -1,5 +1,4 @@
 'use strict';
-// Tầng điều khiển: đọc yêu cầu HTTP, gọi service, định dạng phản hồi. Không có nghiệp vụ, không có SQL.
 const TitleService = require('../services/titleService');
 
 class TitleController {

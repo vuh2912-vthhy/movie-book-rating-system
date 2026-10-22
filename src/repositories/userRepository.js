@@ -1,5 +1,4 @@
 'use strict';
-// Tầng truy cập dữ liệu: chỉ chứa truy vấn SQL tham số hóa (dấu ?), không có nghiệp vụ.
 const db = require('../config/database');
 const { withTransaction } = require('../utils/transaction');
 const { escapeLike } = require('../utils/text');
@@ -15,7 +14,6 @@ const AUTH_CONTEXT_SQL = `
     WHERE u.id = ?`;
 
 class UserRepository {
-    // Dùng cho đăng nhập: kèm cờ "đang bị khóa tạm" tính ngay trong CSDL (UTC).
     static async findByEmail(email) {
         const [rows] = await db.query(
             `SELECT id, email, password_hash, full_name, display_name, status, failed_login_count, token_version,
@@ -26,7 +24,6 @@ class UserRepository {
         return rows.length ? rows[0] : null;
     }
 
-    // Dùng cho mọi yêu cầu có xác thực: trạng thái tài khoản + vai trò + quyền, một truy vấn.
     static async findAuthContextById(userId) {
         const [rows] = await db.query(AUTH_CONTEXT_SQL, [userId]);
         if (!rows.length) return null;
@@ -50,7 +47,6 @@ class UserRepository {
         };
     }
 
-    // Tạo tài khoản và gán vai trò trong một giao dịch: hoặc cả hai thành công, hoặc không gì cả.
     static async createWithRole({ email, passwordHash, fullName, displayName, roleCode }) {
         const conn = await db.getConnection();
         try {
@@ -76,8 +72,6 @@ class UserRepository {
         }
     }
 
-    // Tăng bộ đếm đăng nhập sai; khi đạt ngưỡng thì khóa tạm và đặt lại bộ đếm.
-    // Thứ tự gán trong SET quan trọng: locked_until đọc giá trị cũ của failed_login_count.
     static async registerFailedLogin(userId, maxAttempts, lockMinutes) {
         await db.query(
             `UPDATE users
@@ -100,8 +94,6 @@ class UserRepository {
         );
     }
 
-    // Thu hồi MỌI token đã cấp (đăng xuất, khóa tài khoản, đổi mật khẩu) bằng cách tăng số phiên bản.
-    // Không dùng thời gian nên không có kẽ hở "cùng giây" như so sánh iat.
     static async revokeTokens(userId) {
         await db.query('UPDATE users SET token_version = token_version + 1 WHERE id = ?', [userId]);
     }
@@ -116,13 +108,11 @@ class UserRepository {
         return rows.length > 0;
     }
 
-    // ---- Hồ sơ, mật khẩu ----
     static async findPasswordHashById(userId) {
         const [rows] = await db.query('SELECT id, password_hash FROM users WHERE id = ? LIMIT 1', [userId]);
         return rows[0] || null;
     }
 
-    // Đổi mật khẩu: tăng token_version để mọi thẻ cũ mất hiệu lực ngay, xóa trạng thái khóa tạm.
     static async updatePassword(userId, passwordHash) {
         const [res] = await db.query(
             `UPDATE users SET password_hash = ?, token_version = token_version + 1,
@@ -142,7 +132,6 @@ class UserRepository {
         return rows[0] || null;
     }
 
-    // ---- Quản trị người dùng ----
     static async listPaginated({ q, status, role }, limit, offset) {
         const where = []; const params = [];
         if (q) {
@@ -154,7 +143,7 @@ class UserRepository {
             where.push('EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.code = ?)');
             params.push(role);
         }
-        const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';   // chỉ ghép đoạn cố định, giá trị đi qua ?
+        const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';   
         const [rows] = await db.query(
             `SELECT u.id, u.email, u.full_name, u.display_name, u.status, u.created_at, u.last_login_at,
                     (SELECT GROUP_CONCAT(r.code ORDER BY r.code) FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id) AS roles
@@ -171,14 +160,12 @@ class UserRepository {
         return rows[0] || null;
     }
 
-    // Khóa/mở khóa: tăng token_version để thẻ đang dùng mất hiệu lực ngay.
     static async setStatus(id, status) {
         const [res] = await db.query(
             'UPDATE users SET status = ?, token_version = token_version + 1, failed_login_count = 0, locked_until = NULL WHERE id = ?', [status, id]);
         return res.affectedRows;
     }
 
-    // Đổi vai trò trong một giao dịch; không cho ADMIN cuối cùng bị hạ quyền.
     static async replaceRole(userId, roleCode) {
         return withTransaction(async (conn) => {
             const [locked] = await conn.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);

@@ -2,7 +2,6 @@
 const db = require('../config/database');
 
 class WatchlistRepository {
-    // UPDATE trước, không có dòng thì INSERT; khóa duy nhất (user_id, title_id) chặn trùng khi gửi đồng thời
     static async upsert(userId, titleId, listType) {
         const [updated] = await db.query('UPDATE watchlists SET list_type = ? WHERE user_id = ? AND title_id = ?', [listType, userId, titleId]);
         if (updated.affectedRows > 0) return { created: false };

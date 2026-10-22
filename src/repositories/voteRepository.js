@@ -2,8 +2,7 @@
 const db = require('../config/database');
 
 class VoteRepository {
-    // Đặt phiếu: thử UPDATE trước, không có dòng thì INSERT. Hai yêu cầu cùng lúc của một người
-    // không thể tạo hai dòng nhờ khóa chính (review_id, user_id); bên thua cuộc coi như đã có phiếu.
+
     static async upsert(reviewId, userId, vote) {
         const [updated] = await db.query('UPDATE review_votes SET vote = ? WHERE review_id = ? AND user_id = ?', [vote, reviewId, userId]);
         if (updated.affectedRows > 0) return { created: false };

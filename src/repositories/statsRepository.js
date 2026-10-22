@@ -1,6 +1,5 @@
 'use strict';
-// Truy vấn thống kê (khối K7): nối nhiều bảng, hàm tổng hợp, điều kiện thời gian, hàm cửa sổ.
-// Mọi giá trị từ người dùng đi qua tham số `?`; độ dài SUBSTR lấy từ danh sách cho phép.
+
 const db = require('../config/database');
 
 const GENRE_EXISTS = `EXISTS (SELECT 1 FROM title_genres tg JOIN genres g ON g.id = tg.genre_id
@@ -15,8 +14,6 @@ function titleFilters(filters) {
 }
 
 class StatsRepository {
-    // ---------------------------------------------------------- xếp hạng
-    // Phương án 1: đọc cột tổng hợp đã duy trì sẵn (aggregates), có chỉ mục xếp hạng
     static async rankingAggregate(filters, limit) {
         const { where, params } = titleFilters(filters);
         const [rows] = await db.query(
@@ -30,7 +27,6 @@ class StatsRepository {
         return rows;
     }
 
-    // Phương án 2: tính khi đọc trực tiếp từ bảng ratings (dùng để so sánh hiệu năng, Mục 5.4)
     static async rankingLive(filters, limit, minVotes, prior) {
         const { where, params } = titleFilters(filters);
         const [rows] = await db.query(
@@ -51,7 +47,6 @@ class StatsRepository {
         return Number(rows[0].c) > 0 ? Number(rows[0].s) / Number(rows[0].c) : fallback;
     }
 
-    // ---------------------------------------------------------- theo thể loại
     static async genreStats(kind) {
         const params = [];
         let kindClause = '';
@@ -73,7 +68,6 @@ class StatsRepository {
         return rows;
     }
 
-    // Tác phẩm đứng đầu mỗi thể loại bằng hàm cửa sổ ROW_NUMBER
     static async topTitlePerGenre(kind) {
         const params = [];
         let kindClause = '';
@@ -92,8 +86,6 @@ class StatsRepository {
         return rows;
     }
 
-    // ---------------------------------------------------------- theo thời gian
-    // len = 7 (tháng, 'YYYY-MM') hoặc 10 (ngày, 'YYYY-MM-DD'); since là 'YYYY-MM-DD HH:MM:SS' (UTC)
     static async timeline(granularity, since, kind) {
         const len = granularity === 'day' ? 10 : 7;
         const params = [since];

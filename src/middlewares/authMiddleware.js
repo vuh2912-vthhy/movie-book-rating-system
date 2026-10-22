@@ -13,8 +13,6 @@ const extractToken = (req) => {
     return null;
 };
 
-// Xác thực đầy đủ: chữ ký + hạn token, rồi đối chiếu CSDL (tài khoản còn hoạt động, token đúng phiên bản).
-// Nhờ vậy khóa tài khoản và đăng xuất có hiệu lực ngay, không phải chờ token hết hạn.
 const authenticate = async (req) => {
     const token = extractToken(req);
     if (!token) throw HttpError.unauthorized('Chưa đăng nhập', 'UNAUTHENTICATED');
@@ -40,8 +38,6 @@ const authenticate = async (req) => {
         throw HttpError.forbidden('Tài khoản đã bị khóa hoặc chưa được kích hoạt', 'ACCOUNT_DISABLED');
     }
 
-    // Token chỉ hợp lệ khi mang đúng số phiên bản hiện tại của tài khoản.
-    // Token cũ (không có 'tv') hoặc phát trước lần đăng xuất gần nhất đều bị thu hồi.
     if (decoded.tv !== context.tokenVersion) {
         throw HttpError.unauthorized('Phiên đăng nhập đã bị thu hồi', 'TOKEN_REVOKED');
     }
@@ -49,7 +45,6 @@ const authenticate = async (req) => {
     return context;
 };
 
-// Bắt buộc đăng nhập
 const verifyToken = async (req, res, next) => {
     try {
         req.user = await authenticate(req);
@@ -59,7 +54,6 @@ const verifyToken = async (req, res, next) => {
     }
 };
 
-// Đăng nhập không bắt buộc (trang công khai có cá nhân hóa): lỗi xác thực => coi như khách.
 const optionalAuth = async (req, res, next) => {
     try {
         req.user = await authenticate(req);
@@ -70,7 +64,6 @@ const optionalAuth = async (req, res, next) => {
     next();
 };
 
-// Kiểm soát quyền ở MÁY CHỦ theo bảng role_permissions (không dựa vào ẩn hiện giao diện).
 const authorize = (permission) => (req, res, next) => {
     if (!req.user) return next(HttpError.unauthorized('Chưa đăng nhập', 'UNAUTHENTICATED'));
     if (!req.user.permissions.includes(permission)) {
@@ -87,7 +80,6 @@ const requireRole = (...roleCodes) => (req, res, next) => {
     return next();
 };
 
-// Tương thích mã cũ: isAdmin = chỉ vai trò ADMIN
 const isAdmin = requireRole('ADMIN');
 
 module.exports = { verifyToken, optionalAuth, authorize, requireRole, isAdmin, ACCESS_TOKEN_COOKIE };

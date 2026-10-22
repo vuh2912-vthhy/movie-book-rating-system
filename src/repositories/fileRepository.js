@@ -1,10 +1,8 @@
 'use strict';
-// Tầng truy cập dữ liệu cho tệp tải lên. Chỉ SQL tham số hóa, không có nghiệp vụ.
 const { withTransaction } = require('../utils/transaction');
 const db = require('../config/database');
 
 class FileRepository {
-    // Lưu tệp và gắn làm ảnh bìa của tác phẩm trong MỘT giao dịch.
     static async createPoster({ ownerId, titleId, originalName, storedName, mime, size, sha256, content }) {
         return withTransaction(async (conn) => {
             const [exists] = await conn.execute('SELECT id FROM titles WHERE id = ? FOR UPDATE', [titleId]);

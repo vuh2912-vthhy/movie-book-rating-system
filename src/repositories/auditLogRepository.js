@@ -1,7 +1,6 @@
 'use strict';
 const db = require('../config/database');
 
-// Ghép điều kiện lọc từ bộ lọc đã được kiểm tra; mọi giá trị đi qua tham số `?`
 function buildWhere(filters = {}) {
     const clauses = [];
     const params = [];
@@ -22,7 +21,6 @@ class AuditLogRepository {
         );
     }
 
-    // Sắp xếp theo (created_at, id) để các trang không bị lặp hoặc sót bản ghi cùng thời điểm
     static async findPaginated(filters, limit, offset) {
         const { where, params } = buildWhere(filters);
         const [rows] = await db.query(

@@ -1,8 +1,7 @@
--- Ngày 19: bổ sung khôi phục mật khẩu, quản lý thể loại và nhân vật. Chạy MỘT lần trên mỗi CSDL (an toàn khi chạy lại).
 CREATE TABLE IF NOT EXISTS password_resets (
   id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id    BIGINT UNSIGNED NOT NULL,
-  token_hash CHAR(64)        NOT NULL,           -- SHA-256 của mã đặt lại; KHÔNG lưu mã gốc
+  token_hash CHAR(64)        NOT NULL,          
   expires_at DATETIME        NOT NULL,
   used_at    DATETIME        NULL,
   created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -16,12 +15,10 @@ INSERT IGNORE INTO permissions (code, resource, action) VALUES
   ('genre.manage', 'genre', 'manage'),
   ('person.manage', 'person', 'manage');
 
--- Thể loại: chỉ ADMIN. Nhân vật: MODERATOR và ADMIN.
 INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'genre.manage' WHERE r.code = 'ADMIN';
 INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = 'person.manage' WHERE r.code IN ('ADMIN', 'MODERATOR');
--- Bảo đảm ADMIN có quyền quản lý người dùng và vai trò
 INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code IN ('user.manage', 'role.manage') WHERE r.code = 'ADMIN';
 

@@ -1,17 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Tạo bằng chứng dễ chụp ảnh cho báo cáo (kết quả in rõ máy chủ, thời điểm, vai trò, yêu cầu và phản hồi).
- *   $env:DEMO_PASSWORD='mat-khau-demo'
- *   node scripts/evidence.js                       -> http://localhost:3000
- *   node scripts/evidence.js https://ten-mien.app  -> trực tuyến
- * Bốn phần (chụp mỗi phần một ảnh; dùng --only=idor | matrix | logs | logfilter để chạy riêng từng phần):
- *   idor   - BM4: người dùng B thao tác lên tài nguyên của người dùng A bị từ chối
- *   matrix - BM5: ma trận phân quyền thực tế, 4 vai trò x 11 điểm cuối (mọi yêu cầu không làm thay đổi dữ liệu)
- *   logs   - K8: nhật ký hệ thống, khách 401, USER 403, ADMIN 200
- *   logfilter - K8: bộ lọc nhật ký (action, entity, userId, khoảng thời gian) và từ chối bộ lọc sai (422)
- * Cần Node 18 trở lên.
- */
+
 const BASE = (process.argv.find((a, i) => i > 1 && a.startsWith('http')) || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
 const API = `${BASE}/api/v1`;

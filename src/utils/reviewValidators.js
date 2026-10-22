@@ -8,7 +8,6 @@ const LIST_TYPES = ['want', 'watching', 'done'];
 const REVIEW_STATUSES = ['pending', 'approved', 'rejected', 'hidden'];
 const REPORT_STATUSES = ['open', 'resolved', 'dismissed'];
 const REVIEW_SORTS = ['newest', 'helpful'];
-// Ký tự điều khiển (trừ xuống dòng và tab) không được lưu vào cơ sở dữ liệu
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
 const isString = (v) => typeof v === 'string';

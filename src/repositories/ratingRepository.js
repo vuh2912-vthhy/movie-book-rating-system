@@ -1,10 +1,5 @@
 'use strict';
-// Luồng nghiệp vụ T5: chấm điểm + cập nhật bảng tổng hợp trong MỘT giao dịch.
-//
-// Chống mất cập nhật khi nhiều người chấm cùng lúc:
-//   1) Khóa dòng aggregates của tác phẩm (SELECT ... FOR UPDATE): các lần chấm cùng tác phẩm xếp hàng.
-//   2) Khóa dòng ratings của (user, title): hai yêu cầu cùng người dùng không tạo bản ghi trùng.
-//   3) Tính lại COUNT/SUM từ bảng ratings (nguồn sự thật), không cộng dồn "lệch" ở tầng ứng dụng.
+
 const db = require('../config/database');
 const { average2, weightedScore } = require('../utils/rankingMath');
 const { withTransaction } = require('../utils/transaction');
@@ -20,7 +15,6 @@ async function priorMeanFromAggregates(conn, fallback) {
     return count > 0 ? sum / count : fallback;
 }
 
-// Tính lại dòng tổng hợp của MỘT tác phẩm (phải gọi khi đang giữ khóa dòng aggregates)
 async function recomputeAggregate(conn, titleId, minVotes, fallbackPrior) {
     const [rows] = await conn.query(
         'SELECT COUNT(*) AS c, COALESCE(SUM(score), 0) AS s FROM ratings WHERE title_id = ?',
@@ -50,7 +44,6 @@ class RatingRepository {
         return rows.length ? { id: rows[0].id, score: Number(rows[0].score) } : null;
     }
 
-    // Trả về null nếu tác phẩm chưa có dòng tổng hợp (không tồn tại)
     static async upsert({ userId, titleId, score, minVotes, fallbackPrior }) {
         return withTransaction(async (conn) => {
             const [locked] = await conn.query('SELECT title_id FROM aggregates WHERE title_id = ? FOR UPDATE', [titleId]);
@@ -84,7 +77,6 @@ class RatingRepository {
         }, { isolation: 'READ COMMITTED' });
     }
 
-    // Trả về null nếu người dùng chưa chấm tác phẩm này
     static async remove({ userId, titleId, minVotes, fallbackPrior }) {
         return withTransaction(async (conn) => {
             const [locked] = await conn.query('SELECT title_id FROM aggregates WHERE title_id = ? FOR UPDATE', [titleId]);

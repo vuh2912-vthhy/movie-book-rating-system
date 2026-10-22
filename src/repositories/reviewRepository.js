@@ -1,10 +1,8 @@
 'use strict';
-// Tầng truy cập dữ liệu cho bình luận. Trạng thái bình luận chỉ thay đổi qua các hàm giao dịch bên dưới.
 const db = require('../config/database');
 const { withTransaction } = require('../utils/transaction');
 const AggregateRepository = require('./aggregateRepository');
 
-// Máy trạng thái (Hình 2.5): trạng thái hiện tại -> { hành động: trạng thái mới }
 const TRANSITIONS = {
     pending: { approve: 'approved', reject: 'rejected' },
     approved: { hide: 'hidden' },
@@ -17,7 +15,6 @@ const PUBLIC_ORDER = {
 };
 
 class ReviewRepository {
-    // ------------------------------------------------------------ đọc
     static async findPublicByTitle(titleId, sort, limit, offset) {
         const [rows] = await db.query(
             `SELECT v.id, v.body, v.created_at, v.updated_at, u.display_name, r.score AS author_score
@@ -90,7 +87,6 @@ class ReviewRepository {
         return rows.length ? rows[0] : null;
     }
 
-    // ------------------------------------------------------------ viết
     static async create({ userId, titleId, body }) {
         const [result] = await db.query(
             "INSERT INTO reviews (user_id, title_id, body, status) VALUES (?, ?, ?, 'pending')",
@@ -99,7 +95,6 @@ class ReviewRepository {
         return result.insertId;
     }
 
-    // Sửa bình luận của chính mình: quay về chờ duyệt. Bình luận đã bị ẩn thì không được sửa.
     static async updateMine({ userId, titleId, body }) {
         return withTransaction(async (conn) => {
             if (!(await AggregateRepository.lock(conn, titleId))) return { notFound: true };
@@ -123,18 +118,12 @@ class ReviewRepository {
             if (!(await AggregateRepository.lock(conn, titleId))) return { notFound: true };
             const [rows] = await conn.query('SELECT id, status FROM reviews WHERE user_id = ? AND title_id = ? FOR UPDATE', [userId, titleId]);
             if (!rows.length) return { notFound: true };
-            // Phiếu bình chọn và báo cáo gắn với bình luận bị xóa theo (ON DELETE CASCADE)
             await conn.query('DELETE FROM reviews WHERE id = ?', [rows[0].id]);
             if (rows[0].status === 'approved') await AggregateRepository.recountReviews(conn, titleId);
             return { id: rows[0].id, previousStatus: rows[0].status };
         }, { isolation: 'READ COMMITTED' });
     }
 
-    // ------------------------------------------------------------ kiểm duyệt
-    /**
-     * Chuyển trạng thái bình luận theo máy trạng thái. Hai người kiểm duyệt cùng thao tác một bình luận
-     * được xếp hàng bằng khóa dòng: người đến sau thấy trạng thái đã đổi nên bị từ chối (invalid).
-     */
     static async moderate({ reviewId, action, moderatorId }) {
         return withTransaction(async (conn) => {
             const [peek] = await conn.query(
@@ -142,7 +131,7 @@ class ReviewRepository {
             if (!peek.length) return { notFound: true };
             const titleId = peek[0].title_id;
 
-            await AggregateRepository.lock(conn, titleId); // luôn khóa aggregates trước reviews
+            await AggregateRepository.lock(conn, titleId); 
             const [rows] = await conn.query(
                 `SELECT v.id, v.user_id, v.status, t.title AS title_name
                  FROM reviews v JOIN titles t ON t.id = v.title_id WHERE v.id = ? FOR UPDATE`,

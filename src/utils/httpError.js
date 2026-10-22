@@ -1,7 +1,5 @@
 'use strict';
 
-// Lỗi nghiệp vụ có mã HTTP và mã lỗi máy đọc được.
-// Tầng xử lý lỗi tập trung chuyển thành: { success:false, error:{ code, message, details } }
 class HttpError extends Error {
     constructor(statusCode, code, message, details = []) {
         super(message);

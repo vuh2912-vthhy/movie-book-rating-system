@@ -1,11 +1,5 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * BM1 - bằng chứng "TRƯỚC - SAU" cho tiêm nhiễm SQL, KHÔNG cần cơ sở dữ liệu, KHÔNG kết nối mạng.
- * In ra câu SQL thực sự được tạo khi (a) NỐI CHUỖI dữ liệu người dùng (cách sai, chỉ để minh họa) và
- * (b) dùng THAM SỐ HÓA như mã nguồn của dự án. Chạy:  node scripts/bm1-before-after.js
- * Chỉ dùng trên máy của bạn để minh họa; hệ thống thật chỉ dùng cách (b).
- */
 const mysql = require('mysql2');
 const payloads = ["' OR '1'='1", "');DROP TABLE users;--", "x' UNION SELECT email, password_hash FROM users -- "];
 const line = '='.repeat(100);

@@ -1,14 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Kiểm thử khói cho xác thực và phân quyền (Buổi 04 / Ngày 1).
- *   node scripts/smoke-auth.js                       -> http://localhost:3000
- *   node scripts/smoke-auth.js https://ten-mien.app  -> môi trường trực tuyến
- * Tùy chọn kiểm tra tài khoản quản trị:
- *   ADMIN_EMAIL=admin01@demo.local ADMIN_PASSWORD='...' node scripts/smoke-auth.js
- * Mỗi lần chạy tạo 1 tài khoản smoke_<thời điểm>@demo.local (vai trò USER) để thử.
- * Cần Node 18 trở lên. Chụp ảnh màn hình kết quả làm bằng chứng.
- */
+
 const BASE = (process.argv[2] || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const API = `${BASE}/api/v1`;
 const MAX_ATTEMPTS = parseInt(process.env.MAX_ATTEMPTS || '5', 10);

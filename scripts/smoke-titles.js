@@ -1,15 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Kiểm thử khói Ngày 2: danh mục, tìm kiếm, xếp hạng, chấm điểm, đồng thời, quản trị nội dung.
- *   node scripts/smoke-titles.js                          -> http://localhost:3000
- *   node scripts/smoke-titles.js https://ten-mien.app     -> trực tuyến
- * Để kiểm thử phần nhân viên (MODERATOR/ADMIN) đặt mật khẩu demo đã dùng khi sinh seed:
- *   $env:DEMO_PASSWORD='mat-khau-demo'; node scripts/smoke-titles.js
- * Tùy chọn: LOAD_USERS=30 (số người chấm điểm đồng thời, mặc định 30).
- * Mỗi lần chạy tạo thêm tài khoản load_*@demo.local và vài tác phẩm thử (được ẩn ở cuối).
- * Cần Node 18 trở lên. Chụp ảnh màn hình kết quả làm bằng chứng cho Buổi 05, 06 và 07.
- */
+
 const BASE = (process.argv[2] || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const API = `${BASE}/api/v1`;
 const LOAD = Math.max(5, parseInt(process.env.LOAD_USERS || '30', 10));

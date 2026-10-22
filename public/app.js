@@ -1,5 +1,4 @@
 'use strict';
-// Giao diện tối thiểu (SPA băm #/). MỌI dữ liệu từ máy chủ được chèn bằng textContent (BM2: chống XSS), không dùng innerHTML.
 (() => {
     const $ = (sel) => document.querySelector(sel);
     const main = $('#main');

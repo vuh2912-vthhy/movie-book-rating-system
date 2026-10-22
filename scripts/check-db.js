@@ -1,6 +1,4 @@
 'use strict';
-// Chẩn đoán kết nối CSDL. Chạy:  node scripts/check-db.js
-// Không in mật khẩu hay khóa bí mật.
 const HINTS = {
     ENOTFOUND: 'DB_HOST sai chính tả hoặc máy không phân giải được tên miền (kiểm tra mạng/DNS).',
     ECONNREFUSED: 'Cổng bị từ chối: sai DB_PORT, hoặc dịch vụ MySQL đang tắt.',

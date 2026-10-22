@@ -1,13 +1,9 @@
 'use strict';
-// Tầng điều khiển: chỉ đọc yêu cầu HTTP, gọi service, định dạng phản hồi. Không có nghiệp vụ.
 const env = require('../config/env');
 const AuthService = require('../services/authService');
 const AccountService = require('../services/accountService');
 const { ACCESS_TOKEN_COOKIE } = require('../middlewares/authMiddleware');
 
-// httpOnly: JavaScript không đọc được cookie (giảm rủi ro XSS đánh cắp token)
-// sameSite=strict: trình duyệt không gửi cookie trong yêu cầu từ trang web khác (giảm CSRF)
-// secure: chỉ gửi qua HTTPS khi chạy production (Vercel)
 const baseCookieOptions = () => ({
     httpOnly: true,
     secure: env.isProd,
@@ -45,7 +41,6 @@ class AuthController {
         }
     }
 
-    // Đổi mật khẩu: thành công thì mọi thẻ cũ (kể cả thẻ đang dùng) bị thu hồi, buộc đăng nhập lại.
     static async changePassword(req, res, next) {
         try {
             await AccountService.changePassword(req.user, req.body, req.ip);

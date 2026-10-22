@@ -44,13 +44,11 @@ module.exports = Object.freeze({
         expiresInMs: parseDurationMs(jwtExpiresIn)
     }),
     bcryptRounds: toPositiveInt(process.env.BCRYPT_ROUNDS, 10),
-    // Mô phỏng gửi thư: không có SMTP nên mã đặt lại mật khẩu được trả trong phản hồi khi bật (mặc định bật cho môi trường học tập)
     account: Object.freeze({
         simulateMail: String(process.env.MAIL_SIMULATION || 'true').toLowerCase() !== 'false',
         resetTtlMinutes: toPositiveInt(process.env.RESET_TOKEN_MINUTES, 30)
     }),
     cache: Object.freeze({
-        // 0 = tắt bộ nhớ đệm
         statsTtlMs: process.env.STATS_CACHE_TTL_SECONDS === '0' ? 0 : toPositiveInt(process.env.STATS_CACHE_TTL_SECONDS, 60) * 1000
     }),
     login: Object.freeze({

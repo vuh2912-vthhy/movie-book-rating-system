@@ -1,5 +1,4 @@
 'use strict';
-// Các tài nguyên của CHÍNH người đăng nhập: mã người dùng luôn lấy từ token, không nhận từ đường dẫn.
 const ReviewService = require('../services/reviewService');
 const WatchlistService = require('../services/watchlistService');
 const NotificationService = require('../services/notificationService');

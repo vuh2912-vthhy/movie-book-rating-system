@@ -4,7 +4,6 @@ const { withTransaction } = require('../utils/transaction');
 const AggregateRepository = require('./aggregateRepository');
 
 class ReportRepository {
-    // Mỗi người chỉ báo cáo một bình luận một lần: khóa duy nhất (review_id, reporter_id)
     static async create({ reviewId, reporterId, reason, detail }) {
         const [result] = await db.query(
             'INSERT INTO reports (review_id, reporter_id, reason, detail) VALUES (?, ?, ?, ?)',
@@ -73,7 +72,6 @@ class ReportRepository {
                 return { ok: true, decision, hidden: false, review: { id: review.id, authorId: review.user_id, titleName: review.title_name, status: review.status }, reporterIds: [reports[0].reporter_id] };
             }
 
-            // resolve
             let hidden = false;
             if (review.status === 'approved') {
                 await conn.query(

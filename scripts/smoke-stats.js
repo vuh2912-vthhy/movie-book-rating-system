@@ -1,14 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Kiểm thử khói Ngày 4: xếp hạng, báo cáo thống kê, xuất CSV/Excel, nhật ký có bộ lọc.
- *   node scripts/smoke-stats.js                          -> http://localhost:3000
- *   node scripts/smoke-stats.js https://ten-mien.app     -> trực tuyến
- * Phần nhân viên cần mật khẩu demo của mod01 và admin01:
- *   $env:DEMO_PASSWORD='mat-khau-demo'; node scripts/smoke-stats.js
- * Kịch bản tạo 2 tác phẩm thử có tiêu đề chứa dấu phẩy, nháy kép, chấm phẩy và ký tự "=" để kiểm tra xuất CSV, rồi ẩn chúng.
- * Cần Node 18 trở lên. Chụp ảnh kết quả làm bằng chứng cho Buổi 07, khối K7, K8 và Chương 5.4.
- */
+
 const BASE = (process.argv[2] || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const API = `${BASE}/api/v1`;
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD;

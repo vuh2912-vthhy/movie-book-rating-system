@@ -1,5 +1,4 @@
 'use strict';
-// Tầng điều khiển: đọc yêu cầu, gọi service, định dạng phản hồi.
 const FileService = require('../services/fileService');
 
 class FileController {
@@ -16,7 +15,7 @@ class FileController {
         try {
             const f = await FileService.getPoster(Number(req.params.id));
             res.set({
-                'Content-Type': f.mime_detected,                 // kiểu do MÁY CHỦ xác định lúc tải lên
+                'Content-Type': f.mime_detected,                 
                 'Content-Length': f.size_bytes,
                 'X-Content-Type-Options': 'nosniff',
                 'Content-Disposition': 'inline',

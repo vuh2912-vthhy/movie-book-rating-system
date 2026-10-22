@@ -1,8 +1,5 @@
 'use strict';
-// Bộ nhớ đệm theo thời gian sống (TTL) trong tiến trình. Dùng cho kết quả đọc nhiều, ít đổi (xếp hạng, thống kê).
-// Chiến lược làm mất hiệu lực: (1) hết TTL; (2) xóa toàn bộ ngay khi dữ liệu nguồn thay đổi
-// (chấm điểm, sửa tác phẩm, duyệt bình luận, dựng lại tổng hợp). Trên Vercel mỗi bản sao hàm có bộ nhớ riêng,
-// nên đây là đệm cục bộ từng bản sao: đúng nhờ TTL ngắn, không cần đồng bộ giữa các bản sao.
+
 class TtlCache {
     constructor({ max = 200 } = {}) {
         this.map = new Map();

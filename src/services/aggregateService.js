@@ -23,7 +23,7 @@ class AggregateService {
 
     static async rebuild(user, ip) {
         const result = await AggregateRepository.rebuildAll(ranking.minVotes, ranking.fallbackPriorMean);
-        cache.clear(); // dữ liệu nguồn đổi: bỏ đệm thống kê/xếp hạng
+        cache.clear(); 
         await AuditLogService.logAction(user.id, 'AGGREGATES_REBUILD', 'aggregates', null, ip);
         return { ...result, minVotes: ranking.minVotes };
     }

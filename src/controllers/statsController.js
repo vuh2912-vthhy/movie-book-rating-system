@@ -2,7 +2,6 @@
 const StatsService = require('../services/statsService');
 const ExportService = require('../services/exportService');
 
-// Đo thời gian xử lý ở máy chủ và gửi trong tiêu đề Server-Timing (xem được ở tab Network của DevTools)
 async function timed(res, work) {
     const start = process.hrtime.bigint();
     const result = await work();

@@ -1,9 +1,5 @@
 'use strict';
-// Xuất CSV theo RFC 4180, mở được bằng Excel:
-//  - Trường chứa dấu phân cách, dấu nháy kép hoặc xuống dòng được bọc trong nháy kép; nháy kép bên trong được nhân đôi.
-//  - Dòng kết thúc bằng CRLF; có BOM UTF-8 để Excel hiển thị đúng tiếng Việt.
-//  - Chống "CSV injection": chuỗi bắt đầu bằng = + - @ (hoặc tab, CR) được thêm dấu nháy đơn phía trước
-//    để Excel không hiểu là công thức (OWASP). Số (kiểu number) không bị ảnh hưởng.
+
 const FORMULA_START = /^[=+\-@\t\r]/;
 
 function cell(value, delimiter = ',') {

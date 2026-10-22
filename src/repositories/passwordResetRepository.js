@@ -2,7 +2,6 @@
 const { withTransaction } = require('../utils/transaction');
 
 class PasswordResetRepository {
-    // Mỗi người chỉ có một mã còn hiệu lực: mã cũ chưa dùng bị vô hiệu khi cấp mã mới.
     static async create(userId, tokenHash, ttlMinutes) {
         return withTransaction(async (conn) => {
             await conn.query('UPDATE password_resets SET used_at = UTC_TIMESTAMP() WHERE user_id = ? AND used_at IS NULL', [userId]);
@@ -12,7 +11,6 @@ class PasswordResetRepository {
         });
     }
 
-    // Dùng mã một lần và đặt mật khẩu mới trong CÙNG giao dịch; trả mã người dùng, hoặc null nếu mã không hợp lệ/hết hạn/đã dùng.
     static async consumeAndSetPassword(tokenHash, passwordHash) {
         return withTransaction(async (conn) => {
             const [rows] = await conn.query(

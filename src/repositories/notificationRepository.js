@@ -30,7 +30,6 @@ class NotificationRepository {
         return Number(rows[0].total);
     }
 
-    // Điều kiện user_id nằm ngay trong câu lệnh: không đọc/sửa được thông báo của người khác (chống IDOR)
     static async markRead(id, userId) {
         const [result] = await db.query('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?', [id, userId]);
         return result.affectedRows > 0;

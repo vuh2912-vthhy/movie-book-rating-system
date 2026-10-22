@@ -1,11 +1,5 @@
 'use strict';
-/**
- * Kiểm thử API tích hợp: 27 ca (10 luồng chính, 6 ngoại lệ/biên, 8 phân quyền và bảo mật, 3 báo cáo).
- * Chạy trên hệ thống đã triển khai hoặc cục bộ:
- *   BASE_URL=https://movie-book-rating-system.vercel.app MOD_EMAIL=... MOD_PASSWORD=... ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run test:api
- * Ca cần tài khoản MODERATOR/ADMIN sẽ tự bỏ qua (skip) nếu thiếu biến môi trường tương ứng.
- * Mỗi lần chạy tự tạo tài khoản USER dùng một lần (tên bắt đầu bằng "apitest_"). Chỉ chạy trên hệ thống của nhóm.
- */
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseCsv } = require('../../src/utils/csv');
@@ -36,7 +30,6 @@ const S = { cookieA: null, cookieB: null, title: null, reviewId: null, mod: null
 const needMod = process.env.MOD_EMAIL && process.env.MOD_PASSWORD ? false : 'thiếu MOD_EMAIL, MOD_PASSWORD';
 const needAdmin = process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD ? false : 'thiếu ADMIN_EMAIL, ADMIN_PASSWORD';
 
-// ============================================================ LUỒNG NGHIỆP VỤ CHÍNH (10)
 test('TC-01 Đăng ký tài khoản mới trả 201', async () => {
     const r = await http('POST', '/auth/register', { body: { email: emailA, password: PW, fullName: 'Nguyen Van Test' } });
     assert.equal(r.status, 201, r.text);
@@ -102,7 +95,6 @@ test('TC-10 Bảng xếp hạng công khai sắp xếp giảm dần theo điểm
     assert.ok(s.length >= 1); for (let i = 1; i < s.length; i += 1) assert.ok(s[i - 1] >= s[i], `thứ tự sai ở ${i}`);
 });
 
-// ============================================================ NGOẠI LỆ VÀ DỮ LIỆU BIÊN (6)
 test('TC-11 Điểm ngoài khoảng hoặc sai kiểu bị từ chối 422', async () => {
     for (const score of [0, 6, -1, 'abc', 3.5, null]) {
         const r = await http('PUT', `/titles/${S.title.id}/rating`, { body: { score }, cookie: S.cookieB });
@@ -134,7 +126,6 @@ test('TC-16 Mã số sai định dạng trả 422, mã không tồn tại trả 
     assert.equal((await http('GET', '/titles/99999999')).status, 404);
 });
 
-// ============================================================ PHÂN QUYỀN VÀ BẢO MẬT (8)
 test('TC-17 Chưa đăng nhập gọi điểm cuối ghi bị 401 (BM5)', async () => {
     assert.equal((await http('PUT', `/titles/${S.title.id}/rating`, { body: { score: 3 } })).status, 401);
     assert.equal((await http('GET', '/me/watchlist')).status, 401);
@@ -185,7 +176,6 @@ test('TC-24 Phản hồi có đủ thẻ tiêu đề bảo mật và mã lỗi k
     assert.ok(bad.json.error.requestId, 'thiếu requestId');
 });
 
-// ============================================================ BÁO CÁO VÀ XUẤT DỮ LIỆU (3)
 test('TC-25 Thống kê thể loại: MODERATOR 200 có dữ liệu, USER bị 403', { skip: needMod }, async () => {
     const ok = await http('GET', '/stats/genres', { cookie: S.mod }); assert.equal(ok.status, 200); assert.ok(Array.isArray(ok.json.data));
     assert.equal((await http('GET', '/stats/genres', { cookie: S.cookieA })).status, 403);

@@ -1,5 +1,4 @@
 'use strict';
-// Nghiệp vụ tài khoản của chính người dùng: hồ sơ, đổi mật khẩu, quên và đặt lại mật khẩu (mô phỏng gửi thư).
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const env = require('../config/env');
@@ -28,7 +27,6 @@ class AccountService {
         return AccountService.getProfile(user);
     }
 
-    // Đổi mật khẩu: xác minh mật khẩu hiện tại; thành công thì mọi thẻ đang dùng (kể cả thẻ hiện tại) bị thu hồi.
     static async changePassword(user, body, ip) {
         const { errors, value } = validateChangePassword(body);
         fail('Dữ liệu đổi mật khẩu không hợp lệ', errors);
@@ -44,8 +42,6 @@ class AccountService {
         await AuditLogService.logAction(user.id, 'PASSWORD_CHANGE', 'users', user.id, ip);
     }
 
-    // Quên mật khẩu: luôn trả cùng một thông điệp dù email có tồn tại hay không.
-    // Chỉ lưu BĂM của mã; mã gốc chỉ xuất hiện trong "thư mô phỏng" (khi MAIL_SIMULATION=true).
     static async forgotPassword(body, ip) {
         const { errors, value } = validateForgot(body);
         fail('Thư điện tử không hợp lệ', errors);

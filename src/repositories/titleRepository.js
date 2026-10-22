@@ -1,11 +1,9 @@
 'use strict';
-// Tầng truy cập dữ liệu cho tác phẩm (phim/sách). Chỉ SQL tham số hóa, không có nghiệp vụ.
 const crypto = require('crypto');
 const db = require('../config/database');
 const { withTransaction } = require('../utils/transaction');
 const { escapeLike, normalizeSearchText } = require('../utils/text');
 
-// Danh sách cho phép: tên cột sắp xếp KHÔNG bao giờ lấy trực tiếp từ đầu vào của người dùng.
 const ORDER_BY = {
     rating: 'a.weighted_score DESC, a.rating_count DESC, t.id DESC',
     newest: 't.created_at DESC, t.id DESC',
@@ -17,7 +15,6 @@ const ORDER_BY = {
 const LIST_COLUMNS = `t.id, t.code, t.kind, t.title, t.original_title, t.release_year, t.runtime_min,
        t.page_count, t.poster_path, t.status, a.rating_count, a.rating_avg, a.weighted_score, a.review_count`;
 
-// Ghép điều kiện WHERE từ bộ lọc đã được kiểm tra. Mọi giá trị đi qua tham số `?`.
 function buildWhere(filters) {
     const clauses = [];
     const params = [];
@@ -61,7 +58,6 @@ class TitleRepository {
         return Number(rows[0].total);
     }
 
-    // Lấy thể loại của cả trang bằng MỘT truy vấn (tránh truy vấn lặp N+1).
     static async findGenresForTitles(titleIds) {
         if (!titleIds.length) return [];
         const [rows] = await db.query(
@@ -95,7 +91,6 @@ class TitleRepository {
         return rows;
     }
 
-    // Tạo tác phẩm + thể loại + vai trò + dòng tổng hợp trong MỘT giao dịch.
     static async create(data, createdBy, priorMean) {
         return withTransaction(async (conn) => {
             const [inserted] = await conn.query(
@@ -119,7 +114,6 @@ class TitleRepository {
         });
     }
 
-    // Thay toàn bộ thông tin (PUT). Trả về false nếu tác phẩm không tồn tại.
     static async replace(id, data) {
         return withTransaction(async (conn) => {
             const [locked] = await conn.query('SELECT id FROM titles WHERE id = ? FOR UPDATE', [id]);
@@ -138,7 +132,6 @@ class TitleRepository {
         });
     }
 
-    // "Xóa" là ẩn tác phẩm (giữ nguyên điểm và bình luận đã có)
     static async setStatus(id, status) {
         const [result] = await db.query(
             'UPDATE titles SET status = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?',

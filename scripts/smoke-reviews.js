@@ -1,14 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Kiểm thử khói Ngày 3: bình luận, duyệt (máy trạng thái), bình chọn, báo cáo vi phạm, watchlist, thông báo.
- *   node scripts/smoke-reviews.js                          -> http://localhost:3000
- *   node scripts/smoke-reviews.js https://ten-mien.app     -> trực tuyến
- * Phần kiểm duyệt cần tài khoản mod01 và admin01 (mật khẩu demo đã dùng khi sinh seed):
- *   $env:DEMO_PASSWORD='mat-khau-demo'; node scripts/smoke-reviews.js
- * Mỗi lần chạy tạo 5 tài khoản review_*@demo.local và dọn dữ liệu bình luận, điểm, watchlist của chúng ở cuối.
- * Cần Node 18 trở lên. Chụp ảnh kết quả làm bằng chứng cho Buổi 05, 06 và các mục BM4, BM5.
- */
+
 const BASE = (process.argv[2] || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const API = `${BASE}/api/v1`;
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD;

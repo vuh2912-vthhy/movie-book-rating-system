@@ -1,8 +1,6 @@
 'use strict';
 const HttpError = require('../utils/httpError');
 
-// Mọi lỗi trả về cùng một cấu trúc:
-// { "success": false, "error": { "code": "...", "message": "...", "details": [...], "requestId": "..." } }
 const notFoundHandler = (req, res, next) => {
     const path = req.originalUrl.split('?')[0];
     next(HttpError.notFound(`Không tìm thấy ${req.method} ${path}`));
@@ -10,7 +8,6 @@ const notFoundHandler = (req, res, next) => {
 
 const LEGACY_CODES = { 400: 'BAD_REQUEST', 401: 'UNAUTHENTICATED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT', 422: 'VALIDATION_FAILED' };
 
-// eslint-disable-next-line no-unused-vars
 const errorHandler = (err, req, res, next) => {
     if (res.headersSent) return next(err);
 
@@ -31,11 +28,9 @@ const errorHandler = (err, req, res, next) => {
     } else if (err && typeof err.code === 'string' && err.code.startsWith('LIMIT_')) {
         status = 400; code = 'UPLOAD_ERROR'; message = 'Yêu cầu tải tệp không hợp lệ';
     } else if (err && Number.isInteger(err.statusCode) && err.statusCode >= 400 && err.statusCode < 500) {
-        // Lỗi 4xx do mã cũ ném ra kèm statusCode: giữ nguyên thông điệp do nhóm tự viết.
         status = err.statusCode; code = LEGACY_CODES[status] || 'BAD_REQUEST'; message = err.message;
     }
 
-    // Lỗi 5xx: ghi chi tiết ở máy chủ, KHÔNG trả chi tiết cho người dùng (BM9).
     if (status >= 500) {
         console.error(`[error] ${req.id || '-'} ${req.method} ${req.originalUrl}`, (err && err.stack) || err);
     }

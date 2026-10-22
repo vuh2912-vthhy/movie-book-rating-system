@@ -1,13 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/**
- * Đo thời gian phản hồi: mỗi điểm cuối gọi 50 lần (bỏ 3 lần khởi động), lấy TRUNG VỊ và P95.
- *   node scripts/perf-measure.js https://ten-mien.vercel.app --label=truoc
- *   ...tối ưu...
- *   node scripts/perf-measure.js https://ten-mien.vercel.app --label=sau
- *   node scripts/perf-measure.js --compare      -> in bảng so sánh Mục 5.4 từ hai tệp perf-truoc.json, perf-sau.json
- * Ghi kết quả vào perf-<label>.json. Cần Node 18+. Đặt ADMIN_EMAIL/ADMIN_PASSWORD để đo cả điểm cuối cần quyền.
- */
+
 const fs = require('fs');
 const BASE = (process.argv.find((a, i) => i > 1 && a.startsWith('http')) || process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const LABEL = (process.argv.find((a) => a.startsWith('--label=')) || '--label=lan1').slice(8);

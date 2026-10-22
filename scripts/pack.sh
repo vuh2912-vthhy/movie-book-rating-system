@@ -1,6 +1,3 @@
-#!/usr/bin/env bash
-# Đóng gói nộp bài theo Phụ lục 08. KHÔNG đưa vào: .env, node_modules, .git, tệp tải lên, perf/log tạm.
-# Chạy từ thư mục gốc dự án:  bash scripts/pack.sh CSE702051_N03_Nhom05_DT11
 set -euo pipefail
 NAME="${1:-CSE702051_N03_Nhom05_DT11}"
 OUT="../${NAME}"

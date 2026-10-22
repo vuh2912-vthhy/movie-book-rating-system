@@ -1,5 +1,4 @@
 'use strict';
-// Tạo mã băm bcrypt (cost 10) để dùng chung cho các tài khoản demo trong seed.sql.
 const bcrypt = require('bcrypt');
 
 const password = process.env.DEMO_PASSWORD;
