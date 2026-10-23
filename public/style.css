@@ -288,6 +288,14 @@ textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 }
 .catalog-filter > div { flex: 1 1 250px; }
 .catalog-filter button { flex: 0 1 170px; }
+.catalog-filter button.secondary {
+    border: 1px solid var(--line);
+    color: var(--ink);
+    background: var(--surface-soft);
+}
+.catalog-filter button.secondary:hover { background: var(--surface-deep); }
+.genre-filter-link { color: inherit; text-decoration: none; cursor: pointer; }
+.genre-filter-link:hover { color: var(--accent-hover); border-color: var(--accent); }
 
 label { display: block; margin: 10px 0 6px; color: #303740; font-weight: 650; }
 input,

@@ -125,22 +125,51 @@
     }
 
     async function pageList(params) {
-        const q = new URLSearchParams(params); const page = Number(q.get('page') || 1);
-        const kw = el('input', { id: 'kw', type: 'search', value: q.get('keyword') || '', placeholder: 'Tìm theo tên phim hoặc sách' });
-        const kind = el('select', { id: 'kind' }, el('option', { value: '', text: 'Tất cả' }), el('option', { value: 'movie', text: 'Phim' }), el('option', { value: 'book', text: 'Sách' }));
+        const q = new URLSearchParams(params); const page = Math.max(1, Number.parseInt(q.get('page') || '1', 10) || 1);
+        const kw = el('input', { id: 'kw', type: 'search', value: q.get('keyword') || '', placeholder: 'Tìm theo tên phim hoặc sách', maxlength: '100' });
+        const kind = el('select', { id: 'kind' }, el('option', { value: '', text: 'Phim và sách' }), el('option', { value: 'movie', text: 'Chỉ phim' }), el('option', { value: 'book', text: 'Chỉ sách' }));
         kind.value = q.get('kind') || '';
-        const go = () => { const p = new URLSearchParams(); if (kw.value.trim()) p.set('keyword', kw.value.trim()); if (kind.value) p.set('kind', kind.value); location.hash = '#/?' + p; };
+        // Lấy thể loại động từ API, không hard-code danh sách trong giao diện.
+        let genres = [];
+        try { genres = (await api('GET', '/genres')).data || []; }
+        catch (e) { toast('Không tải được danh sách thể loại: ' + errText(e)); }
+        const genre = el('select', { id: 'genre' },
+            el('option', { value: '', text: 'Tất cả thể loại' }),
+            genres.filter((g) => !g.appliesTo || g.appliesTo === 'both' || !kind.value || g.appliesTo === kind.value || (kind.value === 'movie' && g.appliesTo === 'movie') || (kind.value === 'book' && g.appliesTo === 'book'))
+                .map((g) => el('option', { value: g.code, text: g.name })));
+        genre.value = q.get('genre') || '';
+        const refreshGenreOptions = () => {
+            const selected = genre.value;
+            genre.replaceChildren(el('option', { value: '', text: 'Tất cả thể loại' }),
+                ...genres.filter((g) => !g.appliesTo || g.appliesTo === 'both' || !kind.value || g.appliesTo === kind.value)
+                    .map((g) => el('option', { value: g.code, text: g.name })));
+            if ([...genre.options].some((o) => o.value === selected)) genre.value = selected;
+            else genre.value = '';
+        };
+        const go = () => {
+            const p = new URLSearchParams();
+            if (kw.value.trim()) p.set('keyword', kw.value.trim());
+            if (kind.value) p.set('kind', kind.value);
+            if (genre.value) p.set('genre', genre.value);
+            const sort = q.get('sort'); if (sort) p.set('sort', sort);
+            p.set('page', '1');
+            location.hash = '#/?' + p;
+        };
+        kind.addEventListener('change', refreshGenreOptions);
         const box = el('div', { class: 'grid' }); const pager = el('div', { class: 'pager' });
         const intro = el('section', { class: 'catalog-hero' },
             el('p', { class: 'catalog-kicker', text: 'KHUNG HÌNH · TRANG SÁCH · GÓC NHÌN CỘNG ĐỒNG' }),
             el('h2', { text: 'Danh mục phim và sách' }),
             el('p', { class: 'catalog-description', text: 'Gặp những câu chuyện đáng nhớ — từ màn ảnh rộng đến trang sách, qua cảm nhận của cộng đồng.' }));
         const filters = el('div', { class: 'card row catalog-filter' },
-            el('div', {}, el('label', { for: 'kw', text: 'Tìm kiếm' }), kw),
+            el('div', {}, el('label', { for: 'kw', text: 'Từ khóa' }), kw),
             el('div', {}, el('label', { for: 'kind', text: 'Loại tác phẩm' }), kind),
-            el('button', { class: 'primary', text: 'Tìm tác phẩm', onclick: go }));
+            el('div', {}, el('label', { for: 'genre', text: 'Thể loại' }), genre),
+            el('button', { class: 'primary', text: 'Tìm tác phẩm', onclick: go }),
+            el('button', { class: 'secondary', text: 'Xóa bộ lọc', onclick: () => { location.hash = '#/'; } }));
         main.replaceChildren(intro, filters, box, pager);
         kw.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+        genre.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
         q.set('size', '12'); q.set('page', String(page)); q.set('sort', q.get('sort') || 'rating');
         const r = await api('GET', '/titles?' + q);
         if (!r.data.length) box.append(el('p', { text: 'Không có kết quả.' }));
@@ -152,7 +181,7 @@
                     el('p', { class: 'title-card-meta', text: `${kindLabel} · ${t.releaseYear}` }),
                     el('h3', {}, el('a', { href: `#/title/${t.id}`, text: t.title })),
                     el('p', { class: 'rating-line', text: `★ ${stars(t.stats.ratingAvg)} · ${t.stats.ratingCount} lượt chấm` }),
-                    el('div', { class: 'genre-list' }, t.genres.map((g) => el('span', { class: 'badge', text: g.name }))))));
+                    el('div', { class: 'genre-list' }, t.genres.map((g) => el('a', { class: 'badge genre-filter-link', href: `#/?genre=${encodeURIComponent(g.code || '')}`, text: g.name, title: `Tìm tác phẩm thể loại ${g.name}` }))))));
         }
         const base = new URLSearchParams(q); base.delete('size');
         const mk = (p, label) => { const b = new URLSearchParams(base); b.set('page', p); return el('a', { href: '#/?' + b, text: label }); };
