@@ -1,4 +1,5 @@
 'use strict';
+// Giao diện tối thiểu (SPA băm #/). MỌI dữ liệu từ máy chủ được chèn bằng textContent (BM2: chống XSS), không dùng innerHTML.
 (() => {
     const $ = (sel) => document.querySelector(sel);
     const main = $('#main');
@@ -55,14 +56,43 @@
     // ---------------------------------------------------------------- điều hướng
     function renderNav() {
         const nav = $('#nav'); nav.replaceChildren();
-        const cur = location.hash || '#/';
-        const link = (href, text) => el('a', { href, text, ...(cur === href ? { 'aria-current': 'page' } : {}) });
-        nav.append(link('#/', 'Danh mục'), link('#/ranking', 'Xếp hạng'));
-        if (me) nav.append(link('#/watchlist', 'Danh sách theo dõi'), link('#/profile', 'Tài khoản'));
-        if (isStaff()) nav.append(link('#/moderation', 'Kiểm duyệt'), link('#/catalog', 'Quản lý danh mục'), link('#/stats', 'Thống kê'));
-        if (me && me.roles.includes('ADMIN')) nav.append(link('#/users', 'Người dùng'), link('#/logs', 'Nhật ký'));
-        if (me) nav.append(el('span', { class: 'badge', text: `${me.displayName || me.email} (${me.roles.join(', ')})` }), el('button', { text: 'Đăng xuất', onclick: logout }));
-        else nav.append(link('#/login', 'Đăng nhập'), link('#/register', 'Đăng ký'));
+        const cur = (location.hash || '#/').split('?')[0];
+        const link = (href, text, className) => el('a', { href, text, ...(className ? { class: className } : {}), ...(cur === href ? { 'aria-current': 'page' } : {}) });
+        const items = [link('#/', 'Danh mục'), link('#/ranking', 'Xếp hạng')];
+        if (me) items.push(link('#/watchlist', 'Danh sách theo dõi'), link('#/my-reviews', 'Bình luận của tôi'), link('#/notifications', 'Thông báo'), link('#/profile', 'Tài khoản'));
+        if (isStaff()) items.push(link('#/moderation', 'Kiểm duyệt'), link('#/catalog', 'Quản lý danh mục'), link('#/stats', 'Thống kê'));
+        if (me && me.roles.includes('ADMIN')) items.push(link('#/users', 'Người dùng'), link('#/logs', 'Nhật ký'));
+        if (me) items.push(
+            el('span', { class: 'badge nav-user-badge', text: `${me.displayName || me.email} (${me.roles.join(', ')})` }),
+            el('button', { class: 'nav-logout', type: 'button', text: 'Đăng xuất', onclick: logout })
+        );
+
+        const menu = el('div', { id: 'nav-menu', class: 'nav-menu', hidden: 'hidden' },
+            el('ul', { class: 'nav-menu-list' }, items.map((item) => el('li', {}, item))));
+        const toggle = el('button', {
+            class: 'nav-menu-toggle', type: 'button', 'aria-controls': 'nav-menu', 'aria-expanded': 'false',
+            'aria-label': 'Mở danh sách điều hướng'
+        }, el('span', { class: 'nav-menu-icon', 'aria-hidden': 'true' }), el('span', { class: 'nav-menu-label', text: 'Danh sách' }));
+        const actions = el('div', { class: 'nav-actions' }, toggle);
+        if (!me) actions.append(link('#/login', 'Đăng nhập', 'nav-auth-link'), link('#/register', 'Đăng ký', 'nav-auth-link'));
+
+        const setMenuOpen = (open) => {
+            menu.hidden = !open;
+            toggle.setAttribute('aria-expanded', String(open));
+            toggle.setAttribute('aria-label', open ? 'Đóng danh sách điều hướng' : 'Mở danh sách điều hướng');
+            nav.classList.toggle('nav-open', open);
+        };
+        toggle.addEventListener('click', () => setMenuOpen(menu.hidden));
+        menu.addEventListener('click', (event) => {
+            if (event.target.closest('a, button')) setMenuOpen(false);
+        });
+        nav.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !menu.hidden) {
+                setMenuOpen(false);
+                toggle.focus();
+            }
+        });
+        nav.append(actions, menu);
     }
     async function loadMe() { try { me = (await api('GET', '/auth/me')).data; } catch (e) { me = null; } }
     async function logout() { try { await api('POST', '/auth/logout'); } catch (e) { /* bỏ qua */ } me = null; toast('Đã đăng xuất'); location.hash = '#/'; route(); }
@@ -146,6 +176,19 @@
         if (t.credits && t.credits.length) summary.append(el('p', { class: 'muted title-credits', text: 'Nhân sự: ' + t.credits.map((c) => `${c.name} (${c.role})`).join(', ') }));
         const hero = el('section', { class: 'title-hero' }, titleCover(t.title, t.kind, t.posterPath, 'detail-cover'), summary);
         wrap.append(hero);
+        if (can('title.update')) {
+            const genres = (await api('GET', '/genres')).data || [];
+            const editTitle = el('input', { id: 'edit-title-name', value: t.title || '' });
+            const editOriginal = el('input', { id: 'edit-title-original', value: t.originalTitle || '' });
+            const editYear = el('input', { id: 'edit-title-year', type: 'number', min: '1850', max: '2100', value: t.releaseYear || '' });
+            const editLength = el('input', { id: 'edit-title-length', type: 'number', min: '1', value: isMovie ? (t.runtimeMin || '') : (t.pageCount || '') });
+            const editSynopsis = el('textarea', { id: 'edit-title-synopsis', rows: '4' }); editSynopsis.value = t.synopsis || '';
+            const editStatus = el('select', { id: 'edit-title-status' }, ['draft','published','hidden'].map((x) => el('option', { value: x, text: ({draft:'Bản nháp',published:'Đã công bố',hidden:'Đã ẩn'})[x] }))); editStatus.value = t.status || 'published';
+            const genreBox = el('div', { class: 'genre-edit-list' }); const selectedGenreKeys = new Set((t.genres || []).flatMap((g) => [String(g.id ?? ''), String(g.code ?? ''), String(g.name ?? '')]));
+            const genreChecks = [];
+            for (const g of genres) { const c = el('input', { type: 'checkbox', id: `edit-g-${g.id}`, value: g.id }); c.checked = selectedGenreKeys.has(String(g.id)) || selectedGenreKeys.has(String(g.code)) || selectedGenreKeys.has(String(g.name)); genreChecks.push([g,c]); genreBox.append(el('label', { for: `edit-g-${g.id}`, class: 'genre-edit-option' }, c, ' ', g.name)); }
+            wrap.append(el('div', { class: 'card title-edit-card' }, el('h3', { text: 'Chỉnh sửa thông tin tác phẩm' }), el('div', { class: 'row' }, el('div', {}, el('label', { for: 'edit-title-name', text: 'Tên tác phẩm' }), editTitle), el('div', {}, el('label', { for: 'edit-title-original', text: 'Tên gốc' }), editOriginal), el('div', {}, el('label', { for: 'edit-title-year', text: 'Năm phát hành' }), editYear), el('div', {}, el('label', { for: 'edit-title-length', text: isMovie ? 'Thời lượng (phút)' : 'Số trang' }), editLength)), el('label', { for: 'edit-title-synopsis', text: 'Tóm tắt' }), editSynopsis, el('label', { for: 'edit-title-status', text: 'Trạng thái' }), editStatus, el('p', { class: 'muted', text: 'Thể loại (chọn ít nhất một, tối đa năm)' }), genreBox, el('button', { class: 'primary', text: 'Lưu thông tin', onclick: async () => { try { const ids = genreChecks.filter(([,c]) => c.checked).map(([g]) => Number(g.id)); if (!ids.length || ids.length > 5) throw new Error('Chọn từ 1 đến 5 thể loại.'); const payload = { kind: t.kind, title: editTitle.value.trim(), originalTitle: editOriginal.value.trim() || null, releaseYear: Number(editYear.value), synopsis: editSynopsis.value, status: editStatus.value, genreIds: ids, credits: (t.credits || []).map((c,i) => ({ personId: Number(c.personId || c.person_id || c.id), role: c.role, order: c.order || i+1 })).filter((c) => c.personId) }; payload[isMovie ? 'runtimeMin' : 'pageCount'] = Number(editLength.value); await api('PUT', `/titles/${id}`, payload); toast('Đã cập nhật tác phẩm'); route(); } catch (e) { toast(errText(e)); } } }), can('title.delete') ? el('button', { class: 'danger', text: 'Ẩn tác phẩm', onclick: async () => { if (!confirm('Ẩn tác phẩm này? Tác phẩm sẽ không còn hiển thị công khai.')) return; try { await api('DELETE', `/titles/${id}`); toast('Đã ẩn tác phẩm'); location.hash = '#/'; route(); } catch (e) { toast(errText(e)); } } }) : null));
+        }
         if (isStaff()) {
             const file = el('input', { id: 'poster', type: 'file', accept: 'image/png,image/jpeg,image/webp' });
             wrap.append(el('div', { class: 'card' }, el('h3', { text: 'Ảnh bìa (MODERATOR, ADMIN)' }), el('label', { for: 'poster', text: 'Chọn ảnh JPG, PNG hoặc WebP, tối đa 2 MB' }), file,
@@ -169,6 +212,7 @@
             el('label', { for: 'body', text: 'Bình luận' }), body,
             el('p', {}, el('button', { class: 'primary', text: 'Gửi bình luận', onclick: act(() => api('POST', `/titles/${id}/reviews`, { body: body.value }), 'Đã gửi, đang chờ duyệt') })),
             el('div', { class: 'row' }, el('div', {}, el('label', { for: 'wl', text: 'Danh sách theo dõi' }), wl), el('button', { class: 'primary', text: 'Thêm vào danh sách', onclick: act(() => api('PUT', `/me/watchlist/${id}`, { listType: wl.value }), 'Đã cập nhật danh sách') }))));
+            if (can('rating.delete_own')) wrap.append(el('div', { class: 'card' }, el('h3', { text: 'Quản lý điểm của bạn' }), el('p', { class: 'muted', text: 'Bạn có thể xóa điểm đã chấm cho tác phẩm này.' }), el('button', { class: 'danger', text: 'Xóa điểm đánh giá', onclick: async () => { if (!confirm('Xóa điểm đánh giá của bạn?')) return; try { await api('DELETE', `/titles/${id}/rating`); toast('Đã xóa điểm'); route(); } catch (e) { toast(errText(e)); } } })));
         } else wrap.append(el('p', {}, el('a', { href: '#/login', text: 'Đăng nhập' }), ' để chấm điểm và bình luận.'));
         const reviewResponse = await api('GET', `/titles/${id}/reviews?size=20`);
         const fetchedReviews = Array.isArray(reviewResponse.data) ? [...reviewResponse.data] : [];
@@ -236,7 +280,7 @@
                     } catch (e) { reportMessage.textContent = e.message; }
                 });
                 reviewCard.append(el('div', { class: 'review-actions' },
-                    el('button', { class: 'link', type: 'button', text: `Hữu ích (${voteCount})`, onclick: async () => { try { await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
+                    el('button', { class: 'link', type: 'button', text: r.myVote === 1 ? `Đã bình chọn hữu ích (${voteCount}) · Bỏ phiếu` : `Hữu ích (${voteCount})`, onclick: async () => { try { if (r.myVote === 1) await api('DELETE', `/reviews/${r.id}/vote`); else await api('PUT', `/reviews/${r.id}/vote`, { vote: 1 }); route(); } catch (e) { toast(e.message); } } }),
                     el('button', { class: 'link', type: 'button', text: 'Báo cáo vi phạm', onclick: () => { reportForm.hidden = !reportForm.hidden; } }),
                     reportForm));
             }
@@ -273,7 +317,7 @@
     async function pageWatchlist() {
         const r = await api('GET', '/me/watchlist'); const rows = r.data || [];
         const box = el('div', {}); if (!rows.length) box.append(el('p', { text: 'Danh sách trống.' }));
-        for (const w of rows) box.append(el('div', { class: 'card' }, el('a', { href: `#/title/${w.titleId || w.title_id || w.id}`, text: w.title || `Tác phẩm ${w.titleId || ''}` }), ' ', el('span', { class: 'badge', text: w.listType || w.list_type || '' })));
+        for (const w of rows) { const tid = w.titleId || w.title_id || w.id; box.append(el('div', { class: 'card watchlist-item' }, el('div', {}, el('a', { href: `#/title/${tid}`, text: w.title || `Tác phẩm ${tid}` }), ' ', el('span', { class: 'badge', text: w.listType || w.list_type || '' })), el('button', { class: 'danger', text: 'Bỏ khỏi danh sách', onclick: async () => { if (!confirm('Bỏ tác phẩm này khỏi danh sách theo dõi?')) return; try { await api('DELETE', `/me/watchlist/${tid}`); toast('Đã bỏ khỏi danh sách'); route(); } catch (e) { toast(errText(e)); } } }))); }
         main.replaceChildren(el('h2', { text: 'Danh sách theo dõi của tôi' }), box);
     }
 
@@ -390,20 +434,109 @@
     }
 
     async function pageStats() {
-        const g = (await api('GET', '/stats/genres')).data;
-        const items = Array.isArray(g) ? g : [];
+        const params = new URLSearchParams(location.hash.split('?')[1] || '');
+        const kind = el('select', { id: 'statsKind' }, el('option', { value: '', text: 'Phim và sách' }), el('option', { value: 'movie', text: 'Phim' }), el('option', { value: 'book', text: 'Sách' }));
+        kind.value = params.get('kind') || '';
+        const gran = el('select', { id: 'statsGranularity' }, el('option', { value: 'month', text: 'Theo tháng' }), el('option', { value: 'day', text: 'Theo ngày' })); gran.value = params.get('granularity') || 'month';
+        const span = el('input', { id: 'statsSpan', type: 'number', min: '1', max: gran.value === 'month' ? '36' : '90', value: params.get(gran.value === 'month' ? 'months' : 'days') || (gran.value === 'month' ? '12' : '30') });
+        gran.addEventListener('change', () => { span.max = gran.value === 'month' ? '36' : '90'; span.value = gran.value === 'month' ? '12' : '30'; });
+        const load = el('button', { class: 'primary', text: 'Áp dụng bộ lọc', onclick: () => { const q = new URLSearchParams({ granularity: gran.value, [gran.value === 'month' ? 'months' : 'days']: String(Math.max(1, Number(span.value) || 12)) }); if (kind.value) q.set('kind', kind.value); location.hash = '#/stats?' + q; } });
+        const q = new URLSearchParams({ granularity: params.get('granularity') || 'month', [((params.get('granularity') || 'month') === 'month') ? 'months' : 'days']: params.get((params.get('granularity') || 'month') === 'month' ? 'months' : 'days') || ((params.get('granularity') || 'month') === 'month' ? '12' : '30') });
+        if (params.get('kind')) q.set('kind', params.get('kind'));
+        const [g, timeline, overview] = await Promise.all([
+            api('GET', '/stats/genres' + (params.get('kind') ? `?kind=${encodeURIComponent(params.get('kind'))}` : '')),
+            api('GET', '/stats/timeline?' + q).catch((e) => ({ data: [], error: e.message })),
+            api('GET', '/stats/overview').catch((e) => ({ data: null, error: e.message }))
+        ]);
+        const items = Array.isArray(g.data) ? g.data : [];
         const canvas = el('canvas', { id: 'chart', role: 'img', 'aria-label': 'Biểu đồ số lượt chấm theo thể loại' });
-        const tb = el('tbody', {}); items.forEach((x) => tb.append(el('tr', {}, el('td', { text: x.name }), el('td', { text: x.titleCount }), el('td', { text: x.ratingCount }), el('td', { text: x.ratingAvg ?? '-' }))));
-        main.replaceChildren(el('h2', { text: 'Thống kê theo thể loại' }), canvas,
-            responsiveTable(el('table', {}, el('caption', { class: 'muted', text: 'Dữ liệu của biểu đồ' }), el('thead', {}, el('tr', {}, ['Thể loại', 'Số tác phẩm', 'Lượt chấm', 'Điểm TB'].map((h) => el('th', { scope: 'col', text: h })))), tb)),
-            el('p', {}, el('a', { href: '/api/v1/stats/export?format=csv', text: 'Xuất CSV' }), ' · ', el('a', { href: '/api/v1/stats/export?format=xlsx', text: 'Xuất Excel' }), el('span', { class: 'muted', text: ' (chỉ ADMIN)' })));
-        if (window.Chart) new window.Chart(canvas, { type: 'bar', data: { labels: items.map((x) => x.name), datasets: [{ label: 'Lượt chấm', data: items.map((x) => x.ratingCount), backgroundColor: '#1f3a5f' }] }, options: { responsive: true } });
+        const tb = el('tbody', {}); items.forEach((x) => tb.append(el('tr', {}, el('td', { text: x.name }), el('td', { text: x.titleCount }), el('td', { text: x.ratingCount }), el('td', { text: x.ratingAvg ?? '-' }), el('td', { text: x.reviewCount ?? '-' }), el('td', { text: x.topTitle || x.topTitleName || '-' }))));
+        const statsParts = [el('h2', { text: 'Thống kê và tổng quan' }), el('div', { class: 'card row stats-filter' }, el('div', {}, el('label', { for: 'statsKind', text: 'Loại tác phẩm' }), kind), el('div', {}, el('label', { for: 'statsGranularity', text: 'Khoảng thời gian' }), gran), el('div', {}, el('label', { for: 'statsSpan', text: 'Số kỳ (tháng tối đa 36, ngày tối đa 90)' }), span), load), el('h3', { text: 'Tổng quan hệ thống' })];
+        if (overview.data) {
+            const ov = overview.data;
+            const entries = [];
+            for (const [group, value] of Object.entries(ov)) {
+                if (value && typeof value === 'object' && !Array.isArray(value)) for (const [key, val] of Object.entries(value)) entries.push([`${group}.${key}`, val]);
+                else entries.push([group, value]);
+            }
+            statsParts.push(el('div', { class: 'stats-overview' }, entries.map(([k, v]) => el('div', { class: 'card' }, el('span', { class: 'muted', text: k.replace(/([A-Z])/g, ' $1').replace(/[._]/g, ' ') }), el('strong', { text: String(v ?? '—') })))));
+        } else statsParts.push(el('p', { class: 'muted', text: overview.error || 'Không có dữ liệu tổng quan.' }));
+        statsParts.push(el('h3', { text: 'Thống kê theo thể loại' }), canvas, responsiveTable(el('table', {}, el('caption', { class: 'muted', text: 'Số tác phẩm, lượt chấm, điểm trung bình, bình luận và tác phẩm dẫn đầu' }), el('thead', {}, el('tr', {}, ['Thể loại', 'Số tác phẩm', 'Lượt chấm', 'Điểm TB', 'Bình luận', 'Tác phẩm dẫn đầu'].map((h) => el('th', { scope: 'col', text: h })))), tb)), el('h3', { text: 'Thống kê theo thời gian' }));
+        if (timeline.error) statsParts.push(el('p', { class: 'muted', text: timeline.error }));
+        else {
+            const titems = Array.isArray(timeline.data?.items) ? timeline.data.items : (Array.isArray(timeline.items) ? timeline.items : []);
+            const tBody = el('tbody', {}); titems.forEach((x) => tBody.append(el('tr', {}, el('td', { text: x.period || x.date || x.month || '-' }), el('td', { text: x.ratingCount ?? x.ratings ?? 0 }), el('td', { text: x.reviewCount ?? x.reviews ?? 0 }))));
+            statsParts.push(responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Kỳ', 'Lượt chấm', 'Bình luận'].map((h) => el('th', { scope: 'col', text: h })))), tBody)));
+            const totals = timeline.data?.totals || timeline.totals || {};
+            statsParts.push(el('p', { class: 'muted', text: `Tổng lượt chấm: ${totals.ratingCount ?? totals.ratings ?? '—'} · Tổng bình luận: ${totals.reviewCount ?? totals.reviews ?? '—'}` }));
+        }
+        if (can('stats.export')) {
+            statsParts.push(el('h3', { text: 'Xuất báo cáo (ADMIN)' }));
+            const report = el('select', { id: 'exportReport' }, ['genres', 'timeline', 'ranking', 'catalog', 'overview'].map((x) => el('option', { value: x, text: ({ genres: 'Thể loại', timeline: 'Theo thời gian', ranking: 'Xếp hạng', catalog: 'Danh mục', overview: 'Tổng quan' })[x] })));
+            const format = el('select', { id: 'exportFormat' }, el('option', { value: 'csv', text: 'CSV' }), el('option', { value: 'xlsx', text: 'Excel (.xlsx)' }));
+            const delimiter = el('select', { id: 'exportDelimiter' }, el('option', { value: 'comma', text: 'Dấu phẩy' }), el('option', { value: 'semicolon', text: 'Dấu chấm phẩy (Excel tiếng Việt)' }));
+            const exp = el('button', { class: 'primary', text: 'Tải báo cáo', onclick: () => { const x = new URLSearchParams({ report: report.value, format: format.value, delimiter: delimiter.value }); if (kind.value) x.set('kind', kind.value); if (report.value === 'timeline') { x.set('granularity', gran.value); x.set(gran.value === 'month' ? 'months' : 'days', span.value); } window.location.href = '/api/v1/stats/export?' + x; } });
+            statsParts.push(el('div', { class: 'card row' }, el('div', {}, el('label', { for: 'exportReport', text: 'Báo cáo' }), report), el('div', {}, el('label', { for: 'exportFormat', text: 'Định dạng' }), format), el('div', {}, el('label', { for: 'exportDelimiter', text: 'Phân cách CSV' }), delimiter), exp));
+        }
+        if (me && me.permissions && me.permissions.includes('aggregate.rebuild')) {
+            statsParts.push(el('h3', { text: 'Đối soát dữ liệu xếp hạng (ADMIN)' }), el('div', { class: 'card row' }, el('button', { class: 'primary', text: 'Đối soát bảng tổng hợp', onclick: async () => { try { const r = await api('GET', '/admin/aggregates/reconcile'); const d = r.data || r; const ok = d.consistent === true && (!Array.isArray(d.mismatches) || d.mismatches.length === 0); toast(ok ? 'Đối soát: dữ liệu khớp' : 'Đối soát hoàn tất: phát hiện chênh lệch'); const pre = el('pre', { class: 'json-result', text: JSON.stringify(d, null, 2) }); const old = document.querySelector('.aggregate-result'); if (old) old.remove(); pre.classList.add('aggregate-result'); main.append(pre); } catch (e) { toast(errText(e)); } } }), el('button', { class: 'danger', text: 'Dựng lại bảng tổng hợp', onclick: async () => { if (!confirm('Dựng lại toàn bộ bảng tổng hợp xếp hạng từ dữ liệu đánh giá?')) return; try { const r = await api('POST', '/admin/aggregates/rebuild'); toast('Đã dựng lại bảng tổng hợp'); const pre = el('pre', { class: 'json-result aggregate-result', text: JSON.stringify(r.data || r, null, 2) }); const old = document.querySelector('.aggregate-result'); if (old) old.remove(); main.append(pre); } catch (e) { toast(errText(e)); } } })));
+        }
+        main.replaceChildren(...statsParts);
+        if (window.Chart) new window.Chart(canvas, { type: 'bar', data: { labels: items.map((x) => x.name), datasets: [{ label: 'Lượt chấm', data: items.map((x) => x.ratingCount) }] }, options: { responsive: true } });
     }
 
     async function pageLogs() {
-        const r = await api('GET', '/admin/system-logs?size=30');
-        const tb = el('tbody', {}); r.data.forEach((x) => tb.append(el('tr', {}, el('td', { text: x.createdAt }), el('td', { text: x.userName || x.userId || '-' }), el('td', { text: x.action }), el('td', { text: `${x.entity || ''} ${x.entityId || ''}` }), el('td', { text: x.ip || '' }))));
-        main.replaceChildren(el('h2', { text: 'Nhật ký hệ thống' }), responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Thời điểm', 'Người dùng', 'Hành động', 'Đối tượng', 'IP'].map((h) => el('th', { scope: 'col', text: h })))), tb)));
+        const q = new URLSearchParams(location.hash.split('?')[1] || '');
+        const fields = [ ['userId','Mã người dùng','number'], ['action','Hành động','text'], ['entity','Đối tượng','text'], ['ip','IP','text'], ['from','Từ ngày (UTC)','date'], ['to','Đến ngày (UTC)','date'] ];
+        const inputs = {};
+        const filter = el('div', { class: 'card row log-filter' });
+        for (const [id, label, type] of fields) { inputs[id] = el('input', { id: `log-${id}`, type, value: q.get(id) || '', placeholder: label }); filter.append(el('div', {}, el('label', { for: `log-${id}`, text: label }), inputs[id])); }
+        let actions = [];
+        try { actions = ((await api('GET', '/admin/system-logs/actions')).data || []); } catch (e) { /* API có thể trả dữ liệu ở dạng khác */ }
+        const apply = el('button', { class: 'primary', text: 'Lọc nhật ký', onclick: () => { const p = new URLSearchParams(); for (const [k, input] of Object.entries(inputs)) if (input.value.trim()) p.set(k, input.value.trim()); p.set('page','1'); location.hash = '#/logs?' + p; } });
+        const actionOptions = el('select', { id: 'log-action-preset' }, el('option', { value: '', text: 'Chọn hành động gợi ý' }), actions.map((a) => { const v = typeof a === 'string' ? a : (a.action || a.value || a.name); return el('option', { value: v, text: v }); }));
+        actionOptions.addEventListener('change', () => { if (actionOptions.value) inputs.action.value = actionOptions.value; });
+        filter.append(el('div', {}, el('label', { for: 'log-action-preset', text: 'Danh sách hành động' }), actionOptions), apply);
+        const page = Math.max(1, Number(q.get('page') || 1)); q.set('page', String(page)); q.set('size', '30');
+        const r = await api('GET', '/admin/system-logs?' + q);
+        const tb = el('tbody', {}); (r.data || []).forEach((x) => tb.append(el('tr', {}, el('td', { text: x.createdAt }), el('td', { text: x.userName || x.userId || '-' }), el('td', { text: x.action }), el('td', { text: `${x.entity || ''} ${x.entityId || ''}` }), el('td', { text: x.ip || '' }))));
+        const base = new URLSearchParams(q); base.delete('size'); const prev = new URLSearchParams(base); prev.set('page', String(page - 1)); const next = new URLSearchParams(base); next.set('page', String(page + 1)); const pager = el('div', { class: 'pager' }, page > 1 ? el('a', { href: '#/logs?' + prev, text: '← Trước' }) : null, el('span', { text: `Trang ${r.pagination?.page || page}/${r.pagination?.totalPages || 1} · ${r.pagination?.total ?? (r.data || []).length} bản ghi` }), page < (r.pagination?.totalPages || 1) ? el('a', { href: '#/logs?' + next, text: 'Sau →' }) : null);
+        main.replaceChildren(el('h2', { text: 'Nhật ký hệ thống' }), filter, responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Thời điểm', 'Người dùng', 'Hành động', 'Đối tượng', 'IP'].map((h) => el('th', { scope: 'col', text: h })))), tb)), pager);
+    }
+
+    async function pageMyReviews() {
+        const q = new URLSearchParams(location.hash.split('?')[1] || ''); q.set('size','50');
+        const r = await api('GET', '/me/reviews?' + q); const rows = Array.isArray(r.data) ? r.data : [];
+        const box = el('div', {});
+        if (!rows.length) box.append(el('p', { class: 'muted', text: 'Bạn chưa có bình luận nào.' }));
+        for (const review of rows) {
+            const titleId = review.titleId ?? review.title_id ?? review.title?.id;
+            const titleName = review.titleName || review.titleTitle || review.title?.title || (titleId ? `Tác phẩm #${titleId}` : 'Tác phẩm');
+            const status = review.status || 'Không rõ';
+            const editor = el('textarea', { rows: '4', maxlength: '2000', hidden: 'hidden' }); editor.value = review.body || '';
+            const message = el('p', { class: 'err', role: 'alert' });
+            const save = el('button', { class: 'primary', text: 'Lưu sửa đổi', hidden: 'hidden', onclick: async () => { try { if (editor.value.trim().length < 10) throw new Error('Bình luận phải có ít nhất 10 ký tự.'); if (!titleId) throw new Error('Không xác định được tác phẩm của bình luận.'); await api('PUT', `/titles/${titleId}/reviews/mine`, { body: editor.value.trim() }); toast('Đã sửa bình luận; bình luận đang chờ duyệt lại'); route(); } catch (e) { message.textContent = errText(e); } } });
+            const edit = el('button', { class: 'primary', text: 'Sửa', onclick: () => { editor.hidden = !editor.hidden; save.hidden = editor.hidden; } });
+            const del = el('button', { class: 'danger', text: 'Xóa bình luận', onclick: async () => { if (!confirm('Xóa bình luận này? Phiếu hữu ích và báo cáo gắn với bình luận cũng sẽ bị xóa.')) return; try { if (!titleId) throw new Error('Không xác định được tác phẩm của bình luận.'); await api('DELETE', `/titles/${titleId}/reviews/mine`); toast('Đã xóa bình luận'); route(); } catch (e) { toast(errText(e)); } } });
+            const node = el('div', { class: 'card my-review-card' }, el('div', { class: 'review-meta-line' }, el('a', { href: titleId ? `#/title/${titleId}` : '#/', text: titleName }), el('span', { class: 'badge', text: status })), el('p', { class: 'muted', text: `Đăng: ${review.createdAt || review.created_at || '—'}${review.updatedAt || review.updated_at ? ` · Cập nhật: ${review.updatedAt || review.updated_at}` : ''}` }), el('p', { class: 'review-body', text: review.body || '' }), el('label', { text: 'Nội dung mới', hidden: 'hidden' }), editor, message, el('div', { class: 'review-actions' }, edit, save, del));
+            box.append(node);
+        }
+        main.replaceChildren(el('h2', { text: 'Bình luận của tôi' }), el('p', { class: 'muted', text: 'Bình luận sau khi chỉnh sửa sẽ quay về trạng thái chờ duyệt. Bình luận bị ẩn có thể không được phép sửa.' }), box);
+    }
+
+    async function pageNotifications() {
+        const q = new URLSearchParams(location.hash.split('?')[1] || ''); q.set('size','50');
+        const unread = el('select', { id: 'notification-filter' }, el('option', { value: '', text: 'Tất cả thông báo' }), el('option', { value: 'true', text: 'Chưa đọc' }), el('option', { value: 'false', text: 'Đã đọc' })); unread.value = q.get('unread') || '';
+        unread.addEventListener('change', () => { const p = new URLSearchParams(); if (unread.value) p.set('unread', unread.value); location.hash = '#/notifications?' + p; });
+        const r = await api('GET', '/me/notifications?' + q); const rows = Array.isArray(r.data) ? r.data : [];
+        const unreadCount = r.unreadCount ?? r.meta?.unreadCount ?? r.data?.unreadCount;
+        const box = el('div', {});
+        if (!rows.length) box.append(el('p', { class: 'muted', text: 'Không có thông báo phù hợp.' }));
+        for (const n of rows) {
+            const isRead = Boolean(n.readAt || n.read || n.isRead || n.is_read);
+            box.append(el('div', { class: `card notification-card${isRead ? ' is-read' : ' is-unread'}` }, el('div', { class: 'review-meta-line' }, el('strong', { text: n.title || n.subject || n.type || 'Thông báo' }), el('span', { class: 'badge', text: isRead ? 'Đã đọc' : 'Chưa đọc' })), el('p', { text: n.message || n.body || n.content || '' }), el('p', { class: 'muted', text: n.createdAt || n.created_at || '' }), !isRead ? el('button', { class: 'primary', text: 'Đánh dấu đã đọc', onclick: async () => { try { await api('POST', `/me/notifications/${n.id}/read`); toast('Đã đánh dấu đã đọc'); route(); } catch (e) { toast(errText(e)); } } }) : null));
+        }
+        main.replaceChildren(el('h2', { text: 'Thông báo của tôi' }), el('div', { class: 'card row' }, el('div', {}, el('label', { for: 'notification-filter', text: 'Lọc thông báo' }), unread), el('p', { class: 'muted', text: unreadCount !== undefined ? `Chưa đọc: ${unreadCount}` : '' }), el('button', { class: 'primary', text: 'Đánh dấu tất cả đã đọc', onclick: async () => { try { await api('POST', '/me/notifications/read-all'); toast('Đã đánh dấu tất cả thông báo đã đọc'); route(); } catch (e) { toast(errText(e)); } } })), box);
     }
 
 
@@ -500,8 +633,8 @@
         const plist = el('div', {});
         const loadPersons = async (qtext) => {
             const r = await api('GET', '/persons?size=10' + (qtext ? '&q=' + encodeURIComponent(qtext) : ''));
-            const tb = el('tbody', {}); r.data.forEach((x) => tb.append(el('tr', {}, el('td', { text: x.id }), el('td', { text: x.fullName }), el('td', { text: x.birthYear || '' }), el('td', { text: x.country || '' }))));
-            plist.replaceChildren(responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Họ tên', 'Năm sinh', 'Quốc gia'].map((h) => el('th', { scope: 'col', text: h })))), tb)));
+            const tb = el('tbody', {}); r.data.forEach((x) => { const tr = el('tr', {}, el('td', { text: x.id }), el('td', {}, el('button', { class: 'link', text: x.fullName, onclick: async () => { try { const d = (await api('GET', `/persons/${x.id}`)).data; const name = prompt('Họ và tên', d.fullName || x.fullName); if (name === null) return; const year = prompt('Năm sinh (để trống nếu không có)', d.birthYear || ''); if (year === null) return; const country = prompt('Quốc gia (để trống nếu không có)', d.country || ''); if (country === null) return; const payload = { fullName: name.trim(), birthYear: year.trim() ? Number(year) : null, country: country.trim() || null }; await api('PUT', `/persons/${x.id}`, payload); toast('Đã cập nhật nhân vật'); loadPersons(ps.value.trim()); } catch (e) { toast(errText(e)); } } })), el('td', { text: x.birthYear || '' }), el('td', { text: x.country || '' }), el('td', {}, el('button', { class: 'link', text: 'Chi tiết', onclick: async () => { try { const d = (await api('GET', `/persons/${x.id}`)).data; alert(`Mã: ${d.id || x.id}\nHọ tên: ${d.fullName || x.fullName}\nNăm sinh: ${d.birthYear || '—'}\nQuốc gia: ${d.country || '—'}`); } catch (e) { toast(errText(e)); } } }))); tb.append(tr); });
+            plist.replaceChildren(responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Họ tên', 'Năm sinh', 'Quốc gia', 'Thao tác'].map((h) => el('th', { scope: 'col', text: h })))), tb)));
         };
         const ps = el('input', { id: 'psq', type: 'search', placeholder: 'Tìm nhân vật' });
         const persons = el('div', {}, card('Thêm nhân vật', [{ id: 'fullName', label: 'Họ và tên' }, { id: 'birthYear', label: 'Năm sinh', type: 'number', req: false }, { id: 'country', label: 'Quốc gia', req: false }], 'Thêm nhân vật', async (v) => {
@@ -512,7 +645,7 @@
         if (me.roles.includes('ADMIN')) {
             const gtb = el('tbody', {});
             genres.forEach((g) => gtb.append(el('tr', {}, el('td', { text: g.code }), el('td', { text: g.name }), el('td', { text: g.appliesTo }),
-                el('td', {}, el('button', { class: 'danger', text: 'Xóa', onclick: async () => { try { await api('DELETE', `/genres/${g.id}`); toast('Đã xóa thể loại'); route(); } catch (e) { toast(errText(e)); } } })))));
+                el('td', {}, el('button', { class: 'link', text: 'Sửa', onclick: async () => { const code = prompt('Mã thể loại', g.code); if (code === null) return; const name = prompt('Tên thể loại', g.name); if (name === null) return; try { await api('PUT', `/genres/${g.id}`, { code: code.trim(), name: name.trim(), appliesTo: g.appliesTo || 'both' }); toast('Đã cập nhật thể loại'); route(); } catch (e) { toast(errText(e)); } } }), ' ', el('button', { class: 'danger', text: 'Xóa', onclick: async () => { if (!confirm(`Xóa thể loại ${g.name}?`)) return; try { await api('DELETE', `/genres/${g.id}`); toast('Đã xóa thể loại'); route(); } catch (e) { toast(errText(e)); } } })))));
             parts.push(el('h2', { text: 'Thể loại (ADMIN)' }),
                 card('Thêm thể loại', [{ id: 'code', label: 'Mã (a-z, 0-9, _ -)' }, { id: 'name', label: 'Tên thể loại' }], 'Thêm thể loại', async (v) => { await api('POST', '/genres', { code: v.code, name: v.name, appliesTo: 'both' }); toast('Đã thêm thể loại'); route(); }),
                 responsiveTable(el('table', {}, el('thead', {}, el('tr', {}, ['Mã', 'Tên', 'Áp dụng', 'Thao tác'].map((h) => el('th', { scope: 'col', text: h })))), gtb)));
@@ -531,6 +664,8 @@
             else if (parts[0] === 'title' && parts[1]) await pageTitle(parts[1], qs || '');
             else if (parts[0] === 'ranking') await pageRanking(qs || '');
             else if (parts[0] === 'watchlist') await pageWatchlist();
+            else if (parts[0] === 'my-reviews') await pageMyReviews();
+            else if (parts[0] === 'notifications') await pageNotifications();
             else if (parts[0] === 'moderation') await pageModeration(qs || '');
             else if (parts[0] === 'stats') await pageStats();
             else if (parts[0] === 'logs') await pageLogs();
